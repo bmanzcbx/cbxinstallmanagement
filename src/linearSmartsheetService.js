@@ -342,17 +342,28 @@ async function createSmartsheetColumns(config, columnsToCreate, existingColumnCo
     return [];
   }
 
-  // Smartsheet requires a shared insertion index for bulk column creation.
-  const result = await smartsheetRequest(config, `/sheets/${config.smartsheetSheetId}/columns`, {
-    method: 'POST',
-    body: columnsToCreate.map((column, index) => ({
-      title: column.title,
-      type: column.type,
-      index: existingColumnCount,
-    })),
-  });
+  // Create columns one at a time to avoid Smartsheet bulk-index constraints.
+  const createdColumns = [];
 
-  return result?.result || result?.data || [];
+  for (let offset = 0; offset < columnsToCreate.length; offset += 1) {
+    const column = columnsToCreate[offset];
+    const result = await smartsheetRequest(config, `/sheets/${config.smartsheetSheetId}/columns`, {
+      method: 'POST',
+      body: {
+        title: column.title,
+        type: column.type,
+        index: existingColumnCount + offset,
+      },
+    });
+
+    if (result?.result) {
+      createdColumns.push(result.result);
+    } else if (result?.data) {
+      createdColumns.push(result.data);
+    }
+  }
+
+  return createdColumns;
 }
 
 async function ensureSmartsheetColumnMap(config) {
