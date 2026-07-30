@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const dataDirectory = path.join(__dirname, '..', '.data');
+const dataDirectory = process.env.LINEAR_SYNC_DATA_DIR
+  ? path.resolve(process.env.LINEAR_SYNC_DATA_DIR)
+  : path.join(__dirname, '..', '.data');
 const configFilePath = path.join(dataDirectory, 'linear-smartsheet-config.json');
 const eventsFilePath = path.join(dataDirectory, 'linear-smartsheet-events.json');
 const activeSessions = new Map();
