@@ -3,7 +3,7 @@ services:
     name: cohort-scheduler-api
     env: node
     rootDir: .
-    buildCommand: npm install
+    buildCommand: npm install && npm run prisma:generate
     startCommand: npm run start
     healthCheckPath: /healthz
     plan: free
