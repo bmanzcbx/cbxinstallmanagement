@@ -179,7 +179,8 @@ app.get('/api/integrations/linear-smartsheet/status', requireLinearSyncAccess, a
 app.post('/api/integrations/linear-smartsheet/test', requireLinearSyncAccess, async (req, res) => {
   try {
     const result = await testConnections();
-    res.status(result.success ? 200 : 400).json({ success: result.success, data: result });
+    const combinedMessage = `${result.linear?.message || ''} ${result.smartsheet?.message || ''}`.trim() || 'Connection test completed.';
+    res.status(result.success ? 200 : 400).json({ success: result.success, data: result, message: combinedMessage });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Unable to test integration connections.' });

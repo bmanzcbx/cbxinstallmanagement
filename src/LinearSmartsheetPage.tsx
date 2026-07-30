@@ -334,7 +334,15 @@ export function LinearSmartsheetPage() {
     try {
       const response = await authFetch('/api/integrations/linear-smartsheet/test', { method: 'POST' });
       const payload = await readJsonResponse<ApiEnvelope<{ linear: { message: string }; smartsheet: { message: string } }>>(response);
-      if (!response.ok || !payload?.data) {
+      const detailMessage = payload?.data
+        ? `${payload.data.linear?.message || ''} ${payload.data.smartsheet?.message || ''}`.trim()
+        : '';
+
+      if (!response.ok) {
+        throw new Error(detailMessage || payload?.message || 'Connection test failed.');
+      }
+
+      if (!payload?.data) {
         throw new Error(payload?.message || 'Connection test failed.');
       }
 
