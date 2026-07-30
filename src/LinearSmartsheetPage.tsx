@@ -207,7 +207,21 @@ export function LinearSmartsheetPage() {
       headers.set('x-linear-sync-session', sessionToken);
     }
 
-    return fetch(input, { ...init, headers });
+    return fetch(input, { cache: 'no-store', ...init, headers });
+  };
+
+  const refreshStatus = async () => {
+    setBusyAction('refresh');
+    setMessage(null);
+
+    try {
+      await loadProtectedPage();
+      setMessage({ tone: 'success', text: 'Status refreshed.' });
+    } catch (error) {
+      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Unable to refresh status.' });
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   const loadProtectedPage = async () => {
@@ -585,8 +599,8 @@ export function LinearSmartsheetPage() {
           <button type="button" onClick={() => void runSampleSync()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
             {busyAction === 'sample' ? 'Syncing...' : 'Send sample sync'}
           </button>
-          <button type="button" onClick={() => void loadProtectedPage()} disabled={busyAction !== null} style={ghostButtonStyle}>
-            Refresh status
+          <button type="button" onClick={() => void refreshStatus()} disabled={busyAction !== null} style={ghostButtonStyle}>
+            {busyAction === 'refresh' ? 'Refreshing...' : 'Refresh status'}
           </button>
           <button type="button" onClick={lockPage} disabled={busyAction !== null} style={ghostButtonStyle}>
             Lock page
