@@ -3,3 +3,12 @@ node_modules
 .env
 
 /generated/prisma
+
+# Build output
+dist/
+
+# Local runtime logs
+*.log
+
+# Local integration state and secrets
+.data/
