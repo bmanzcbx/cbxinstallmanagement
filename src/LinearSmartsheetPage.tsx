@@ -479,8 +479,10 @@ export function LinearSmartsheetPage() {
   const isRenderOrigin = runtimeOrigin.toLowerCase().includes('onrender.com');
   const webhookBaseOrigin = hasConfiguredPublicBaseUrl ? configuredPublicBaseUrl : runtimeOrigin;
   const webhookUrl = `${webhookBaseOrigin}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
-  const productionWebhookBase = hasConfiguredPublicBaseUrl ? configuredPublicBaseUrl : (isRenderOrigin ? runtimeOrigin : 'https://your-service.onrender.com');
-  const productionWebhookUrl = `${productionWebhookBase}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
+  const productionWebhookBase = hasConfiguredPublicBaseUrl ? configuredPublicBaseUrl : (isRenderOrigin ? runtimeOrigin : '');
+  const productionWebhookUrl = productionWebhookBase
+    ? `${productionWebhookBase}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`
+    : 'Set and save your Render base URL to generate the production webhook URL.';
   const localWebhookUrl = `${runtimeOrigin}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
   const showHttpsWarning = Boolean(form.publicBaseUrl) && !form.publicBaseUrl.trim().toLowerCase().startsWith('https://');
   const showLocalhostWarning = webhookBaseOrigin.toLowerCase().includes('localhost');
@@ -718,7 +720,7 @@ export function LinearSmartsheetPage() {
           <textarea readOnly value={localWebhookUrl} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Consolas, monospace' }} />
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" onClick={() => void copyToClipboard(productionWebhookUrl)} style={ghostButtonStyle}>
+          <button type="button" onClick={() => void copyToClipboard(productionWebhookUrl)} disabled={!productionWebhookBase} style={ghostButtonStyle}>
             Copy production webhook URL
           </button>
           <button type="button" onClick={() => void copyToClipboard(localWebhookUrl)} style={ghostButtonStyle}>
@@ -728,6 +730,7 @@ export function LinearSmartsheetPage() {
         <div style={{ display: 'grid', gap: '0.35rem', color: '#64748b', fontSize: '0.95rem' }}>
           <span>Recommended Linear events: issue create, issue update, project create, project update.</span>
           <span>Production URL uses your current webhook URL and Render domain when available.</span>
+          {!productionWebhookBase ? <span style={{ color: '#991b1b' }}>Production webhook URL is unavailable until your Render base URL is saved.</span> : null}
           {!hasConfiguredPublicBaseUrl ? <span style={{ color: '#991b1b' }}>Render base URL is not saved yet. Set it above and click Save settings to replace localhost with your Render domain.</span> : null}
           {showHttpsWarning ? <span style={{ color: '#991b1b' }}>Render base URL should start with https:// for Linear webhooks.</span> : null}
           {showLocalhostWarning ? <span style={{ color: '#991b1b' }}>Webhook URL is using localhost. Linear cannot reach localhost; set your Render base URL and save settings.</span> : null}
