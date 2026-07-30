@@ -244,6 +244,32 @@ async function appendEventLog(entry) {
   return next;
 }
 
+function summarizeWebhookPayload(payload) {
+  try {
+    const record = normalizeLinearPayload(payload || {});
+    return {
+      linearId: record.linearId || 'unknown',
+      summary: `${record.kind || 'Event'} ${record.action || 'update'}: ${record.title || '(untitled)'}`,
+    };
+  } catch (error) {
+    return {
+      linearId: 'unknown',
+      summary: 'Event update: (unparsed payload)',
+    };
+  }
+}
+
+async function recordWebhookFailure(payload, errorMessage) {
+  const details = summarizeWebhookPayload(payload);
+  await appendEventLog({
+    receivedAt: new Date().toISOString(),
+    success: false,
+    summary: details.summary,
+    linearId: details.linearId,
+    error: errorMessage || 'Webhook processing failed.',
+  });
+}
+
 async function getStatus() {
   const [config, eventLog] = await Promise.all([getStoredConfig(), readEventLog()]);
   return {
@@ -535,37 +561,43 @@ async function generateSmartsheetStructure() {
 
 async function processLinearEvent(payload, requestHeaders = {}) {
   const config = await getStoredConfig();
-  const providedToken = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
 
-  if (!config.webhookToken || providedToken !== config.webhookToken) {
-    throw new Error('Invalid webhook token.');
+  try {
+    const providedToken = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
+
+    if (!config.webhookToken || providedToken !== config.webhookToken) {
+      throw new Error('Invalid webhook token.');
+    }
+
+    if (!config.enabled) {
+      throw new Error('Linear to Smartsheet sync is disabled.');
+    }
+
+    const record = normalizeLinearPayload(payload);
+    if (!record.linearId) {
+      throw new Error('Linear payload is missing a stable issue or project ID.');
+    }
+
+    const result = await upsertSmartsheetRow(config, record);
+    const eventEntry = {
+      receivedAt: new Date().toISOString(),
+      success: true,
+      summary: `${record.kind} ${record.action}: ${record.title}`,
+      linearId: record.linearId,
+      smartsheetMode: result.mode,
+      rowId: result.rowId,
+    };
+
+    await appendEventLog(eventEntry);
+    return {
+      success: true,
+      record,
+      smartsheet: result,
+    };
+  } catch (error) {
+    await recordWebhookFailure(payload, error?.message || 'Webhook processing failed.');
+    throw error;
   }
-
-  if (!config.enabled) {
-    throw new Error('Linear to Smartsheet sync is disabled.');
-  }
-
-  const record = normalizeLinearPayload(payload);
-  if (!record.linearId) {
-    throw new Error('Linear payload is missing a stable issue or project ID.');
-  }
-
-  const result = await upsertSmartsheetRow(config, record);
-  const eventEntry = {
-    receivedAt: new Date().toISOString(),
-    success: true,
-    summary: `${record.kind} ${record.action}: ${record.title}`,
-    linearId: record.linearId,
-    smartsheetMode: result.mode,
-    rowId: result.rowId,
-  };
-
-  await appendEventLog(eventEntry);
-  return {
-    success: true,
-    record,
-    smartsheet: result,
-  };
 }
 
 async function processSampleEvent() {
