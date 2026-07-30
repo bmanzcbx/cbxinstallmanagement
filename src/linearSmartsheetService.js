@@ -597,10 +597,12 @@ async function processLinearEvent(payload, requestHeaders = {}) {
   const config = await getStoredConfig();
 
   try {
-    const providedToken = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
+    const providedTokenRaw = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
+    const providedToken = typeof providedTokenRaw === 'string' ? decodeURIComponent(providedTokenRaw).trim() : null;
+    const expectedToken = String(config.webhookToken || '').trim();
 
-    if (!config.webhookToken || providedToken !== config.webhookToken) {
-      throw new Error('Invalid webhook token.');
+    if (!expectedToken || providedToken !== expectedToken) {
+      throw new Error('Invalid webhook token. Copy the latest production webhook URL from Linear Sync and replace the webhook URL in Linear.');
     }
 
     if (!config.enabled) {
