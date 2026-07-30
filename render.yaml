@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cohort-scheduler-api
+    env: node
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm run start
+    healthCheckPath: /healthz
+    plan: free
+    autoDeploy: true
