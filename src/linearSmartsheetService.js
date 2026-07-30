@@ -332,6 +332,27 @@ function buildCellValueMap(record) {
   };
 }
 
+function isDeletionEvent(payload, record) {
+  const actionText = String(payload?.action || payload?.event || payload?.trigger || record?.action || '').toLowerCase();
+  return actionText.includes('delete') || actionText.includes('remove') || actionText.includes('archive');
+}
+
+function buildDeletionAttentionRecord(payload, record) {
+  const deletedAt = new Date().toISOString();
+  const baseTitle = record.title || '(untitled)';
+  return {
+    ...record,
+    linearId: `${record.linearId}::deleted::${Date.now()}`,
+    title: `[RED FLAG] ATTENTION REQUIRED - Deleted in Linear: ${baseTitle}`,
+    state: 'DELETED',
+    kind: 'RED_FLAG',
+    action: 'delete',
+    priority: 'RED_FLAG',
+    updatedAt: deletedAt,
+    rawPayload: JSON.stringify({ deletedAt, payload }).slice(0, 4000),
+  };
+}
+
 async function smartsheetRequest(config, pathname, options = {}) {
   if (typeof fetch !== 'function') {
     throw new Error('Global fetch is unavailable in this Node runtime.');
@@ -490,6 +511,19 @@ async function upsertSmartsheetRow(config, record) {
   return { mode: 'created', rowId: created?.result?.[0]?.id || null };
 }
 
+async function createSmartsheetRow(config, record) {
+  const ensured = await ensureSmartsheetColumnMap(config);
+  const resolvedConfig = ensured.config;
+  const cells = buildSmartsheetCells(resolvedConfig, record);
+
+  const created = await smartsheetRequest(resolvedConfig, `/sheets/${resolvedConfig.smartsheetSheetId}/rows`, {
+    method: 'POST',
+    body: [{ toTop: true, cells }],
+  });
+
+  return { mode: 'created', rowId: created?.result?.[0]?.id || null };
+}
+
 async function verifyLinearConnection(config) {
   if (!config.linearApiKey) {
     return { ok: false, message: 'Linear API key is not configured.' };
@@ -578,12 +612,16 @@ async function processLinearEvent(payload, requestHeaders = {}) {
       throw new Error('Linear payload is missing a stable issue or project ID.');
     }
 
-    const result = await upsertSmartsheetRow(config, record);
+    const deletionEvent = isDeletionEvent(payload, record);
+    const finalRecord = deletionEvent ? buildDeletionAttentionRecord(payload, record) : record;
+    const result = deletionEvent
+      ? await createSmartsheetRow(config, finalRecord)
+      : await upsertSmartsheetRow(config, finalRecord);
     const eventEntry = {
       receivedAt: new Date().toISOString(),
       success: true,
-      summary: `${record.kind} ${record.action}: ${record.title}`,
-      linearId: record.linearId,
+      summary: `${finalRecord.kind} ${finalRecord.action}: ${finalRecord.title}`,
+      linearId: finalRecord.linearId,
       smartsheetMode: result.mode,
       rowId: result.rowId,
     };
@@ -591,7 +629,7 @@ async function processLinearEvent(payload, requestHeaders = {}) {
     await appendEventLog(eventEntry);
     return {
       success: true,
-      record,
+      record: finalRecord,
       smartsheet: result,
     };
   } catch (error) {
