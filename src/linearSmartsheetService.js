@@ -342,12 +342,13 @@ async function createSmartsheetColumns(config, columnsToCreate, existingColumnCo
     return [];
   }
 
+  // Smartsheet requires a shared insertion index for bulk column creation.
   const result = await smartsheetRequest(config, `/sheets/${config.smartsheetSheetId}/columns`, {
     method: 'POST',
     body: columnsToCreate.map((column, index) => ({
       title: column.title,
       type: column.type,
-      index: existingColumnCount + index,
+      index: existingColumnCount,
     })),
   });
 
