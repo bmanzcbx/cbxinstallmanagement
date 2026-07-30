@@ -185,6 +185,7 @@ export function LinearSmartsheetPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const currentOrigin = window.location.origin;
 
   const copyToClipboard = async (value: string) => {
     if (!value) {
@@ -427,9 +428,17 @@ export function LinearSmartsheetPage() {
     }));
   };
 
-  const webhookBaseOrigin = (form.publicBaseUrl || config.publicBaseUrl || window.location.origin).trim().replace(/\/+$/, '');
+  const runtimeOrigin = window.location.origin.trim().replace(/\/+$/, '');
+  const configuredPublicBaseUrl = (form.publicBaseUrl || config.publicBaseUrl || '').trim().replace(/\/+$/, '');
+  const hasConfiguredPublicBaseUrl = Boolean(configuredPublicBaseUrl);
+  const isRenderOrigin = runtimeOrigin.toLowerCase().includes('onrender.com');
+  const webhookBaseOrigin = hasConfiguredPublicBaseUrl ? configuredPublicBaseUrl : runtimeOrigin;
   const webhookUrl = `${webhookBaseOrigin}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
+  const productionWebhookBase = hasConfiguredPublicBaseUrl ? configuredPublicBaseUrl : (isRenderOrigin ? runtimeOrigin : 'https://your-service.onrender.com');
+  const productionWebhookUrl = `${productionWebhookBase}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
+  const localWebhookUrl = `${runtimeOrigin}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
   const showHttpsWarning = Boolean(form.publicBaseUrl) && !form.publicBaseUrl.trim().toLowerCase().startsWith('https://');
+  const showLocalhostWarning = webhookBaseOrigin.toLowerCase().includes('localhost');
 
   if (!authStatus?.isAuthorized) {
     return (
@@ -525,6 +534,18 @@ export function LinearSmartsheetPage() {
               placeholder="https://your-service.onrender.com"
               style={inputStyle}
             />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm((current) => ({ ...current, publicBaseUrl: currentOrigin }));
+                  setMessage({ tone: 'success', text: `Render base URL set to ${currentOrigin}. Click Save settings.` });
+                }}
+                style={ghostButtonStyle}
+              >
+                Use current app URL
+              </button>
+            </div>
             <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
               Stored and used to generate the exact webhook URL for Linear.
             </span>
@@ -613,15 +634,28 @@ export function LinearSmartsheetPage() {
         <p style={{ margin: 0, color: '#475569', lineHeight: 1.55 }}>
           In Linear, create a webhook for issue and project events and point it to this URL. When automatic field generation is enabled, the backend will map or create the Smartsheet destination fields before inserting or updating rows.
         </p>
-        <textarea readOnly value={webhookUrl} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Consolas, monospace' }} />
+        <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+          <span style={{ fontWeight: 700 }}>Production webhook URL (Render)</span>
+          <textarea readOnly value={productionWebhookUrl} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Consolas, monospace' }} />
+        </label>
+        <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+          <span style={{ fontWeight: 700 }}>Local testing webhook URL (optional)</span>
+          <textarea readOnly value={localWebhookUrl} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'Consolas, monospace' }} />
+        </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" onClick={() => void copyToClipboard(webhookUrl)} style={ghostButtonStyle}>
-            Copy webhook URL
+          <button type="button" onClick={() => void copyToClipboard(productionWebhookUrl)} style={ghostButtonStyle}>
+            Copy production webhook URL
+          </button>
+          <button type="button" onClick={() => void copyToClipboard(localWebhookUrl)} style={ghostButtonStyle}>
+            Copy local testing URL
           </button>
         </div>
         <div style={{ display: 'grid', gap: '0.35rem', color: '#64748b', fontSize: '0.95rem' }}>
           <span>Recommended Linear events: issue create, issue update, project create, project update.</span>
+          <span>Production URL uses your current webhook URL and Render domain when available.</span>
+          {!hasConfiguredPublicBaseUrl ? <span style={{ color: '#991b1b' }}>Render base URL is not saved yet. Set it above and click Save settings to replace localhost with your Render domain.</span> : null}
           {showHttpsWarning ? <span style={{ color: '#991b1b' }}>Render base URL should start with https:// for Linear webhooks.</span> : null}
+          {showLocalhostWarning ? <span style={{ color: '#991b1b' }}>Webhook URL is using localhost. Linear cannot reach localhost; set your Render base URL and save settings.</span> : null}
           <span>This app only runs 24/7 when the server is deployed somewhere always-on.</span>
         </div>
       </section>
