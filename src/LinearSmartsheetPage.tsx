@@ -184,6 +184,9 @@ export function LinearSmartsheetPage() {
   const [showUnlockPassword, setShowUnlockPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [isAutoSavingBaseUrl, setIsAutoSavingBaseUrl] = useState(false);
+  const [hasAttemptedAutoSaveBaseUrl, setHasAttemptedAutoSaveBaseUrl] = useState(false);
+  const [allowSettingsEdit, setAllowSettingsEdit] = useState(false);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const currentOrigin = window.location.origin;
 
@@ -289,6 +292,47 @@ export function LinearSmartsheetPage() {
     void loadAuthStatus();
   }, []);
 
+  useEffect(() => {
+    const normalizedOrigin = currentOrigin.trim().replace(/\/+$/, '');
+    const isRenderOrigin = normalizedOrigin.toLowerCase().includes('onrender.com');
+    const existingBaseUrl = (form.publicBaseUrl || config.publicBaseUrl || '').trim();
+
+    if (!authStatus?.isAuthorized || isLoading || hasAttemptedAutoSaveBaseUrl || !isRenderOrigin || existingBaseUrl) {
+      return;
+    }
+
+    const autoSaveBaseUrl = async () => {
+      setIsAutoSavingBaseUrl(true);
+
+      try {
+        const response = await authFetch('/api/integrations/linear-smartsheet/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...form,
+            publicBaseUrl: normalizedOrigin,
+          }),
+        });
+
+        const payload = await readJsonResponse<ApiEnvelope<IntegrationConfig>>(response);
+        if (!response.ok || !payload?.success || !payload.data) {
+          throw new Error(payload?.message || 'Unable to auto-save Render base URL.');
+        }
+
+        setConfig(payload.data);
+        setForm(createInitialForm(payload.data));
+        setMessage({ tone: 'success', text: `Render base URL auto-saved as ${normalizedOrigin}.` });
+      } catch (error) {
+        setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Unable to auto-save Render base URL.' });
+      } finally {
+        setHasAttemptedAutoSaveBaseUrl(true);
+        setIsAutoSavingBaseUrl(false);
+      }
+    };
+
+    void autoSaveBaseUrl();
+  }, [authStatus?.isAuthorized, config.publicBaseUrl, currentOrigin, form, hasAttemptedAutoSaveBaseUrl, isLoading]);
+
   const unlockPage = async () => {
     setBusyAction('unlock');
     setMessage(null);
@@ -333,6 +377,7 @@ export function LinearSmartsheetPage() {
 
       setConfig(payload.data);
       setForm(createInitialForm(payload.data));
+      setAllowSettingsEdit(false);
       setMessage({ tone: 'success', text: payload.message || 'Integration settings saved.' });
       await loadProtectedPage();
     } catch (error) {
@@ -439,6 +484,10 @@ export function LinearSmartsheetPage() {
   const localWebhookUrl = `${runtimeOrigin}${config.webhookUrlPath}?token=${encodeURIComponent(form.webhookToken || config.webhookToken || '')}`;
   const showHttpsWarning = Boolean(form.publicBaseUrl) && !form.publicBaseUrl.trim().toLowerCase().startsWith('https://');
   const showLocalhostWarning = webhookBaseOrigin.toLowerCase().includes('localhost');
+  const hasSheetId = Boolean((form.smartsheetSheetId || config.smartsheetSheetId || '').trim());
+  const hasWebhookToken = Boolean((form.webhookToken || config.webhookToken || '').trim());
+  const isSetAndForgetReady = hasConfiguredPublicBaseUrl && config.hasLinearApiKey && config.hasSmartsheetApiKey && hasSheetId && hasWebhookToken;
+  const isSettingsLocked = isSetAndForgetReady && !allowSettingsEdit;
 
   if (!authStatus?.isAuthorized) {
     return (
@@ -500,132 +549,158 @@ export function LinearSmartsheetPage() {
       ) : null}
 
       <section style={panelStyle}>
-        <div style={{ display: 'grid', gap: '0.35rem' }}>
-          <label style={{ fontWeight: 700, color: '#0f172a' }}>
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))}
-              style={{ marginRight: '0.6rem' }}
-            />
-            Enable automatic webhook sync
-          </label>
-          <label style={{ fontWeight: 700, color: '#0f172a' }}>
-            <input
-              type="checkbox"
-              checked={form.autoGenerateSheetStructure}
-              onChange={(event) => setForm((current) => ({ ...current, autoGenerateSheetStructure: event.target.checked }))}
-              style={{ marginRight: '0.6rem' }}
-            />
-            Generate Smartsheet fields automatically from Linear data
-          </label>
-          <span style={{ color: '#64748b', fontSize: '0.95rem' }}>
-            With automatic generation on, the backend will locate matching columns by title or create the missing destination fields in your sheet.
-          </span>
-        </div>
-
-        <div style={{ display: 'grid', gap: '0.9rem', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Render base URL</span>
-            <input
-              type="text"
-              value={form.publicBaseUrl}
-              onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
-              placeholder="https://your-service.onrender.com"
-              style={inputStyle}
-            />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setForm((current) => ({ ...current, publicBaseUrl: currentOrigin }));
-                  setMessage({ tone: 'success', text: `Render base URL set to ${currentOrigin}. Click Save settings.` });
-                }}
-                style={ghostButtonStyle}
-              >
-                Use current app URL
-              </button>
-            </div>
-            <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
-              Stored and used to generate the exact webhook URL for Linear.
+        {isSettingsLocked ? (
+          <div style={{ display: 'grid', gap: '0.45rem', color: '#334155' }}>
+            <h3 style={{ margin: 0, color: '#0f172a' }}>Set-and-forget mode is active</h3>
+            <span>Your Linear Sync automation is configured and ready to run 24/7.</span>
+            <span>Webhook sync: {form.enabled ? 'Enabled' : 'Disabled'}</span>
+            <span>Auto field generation: {form.autoGenerateSheetStructure ? 'Enabled' : 'Disabled'}</span>
+            <span>Render base URL: {configuredPublicBaseUrl}</span>
+            <span style={{ color: '#64748b', fontSize: '0.95rem' }}>
+              You only need to unlock settings if you are troubleshooting or rotating credentials.
             </span>
-          </label>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gap: '0.35rem' }}>
+              <label style={{ fontWeight: 700, color: '#0f172a' }}>
+                <input
+                  type="checkbox"
+                  checked={form.enabled}
+                  onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))}
+                  style={{ marginRight: '0.6rem' }}
+                />
+                Enable automatic webhook sync
+              </label>
+              <label style={{ fontWeight: 700, color: '#0f172a' }}>
+                <input
+                  type="checkbox"
+                  checked={form.autoGenerateSheetStructure}
+                  onChange={(event) => setForm((current) => ({ ...current, autoGenerateSheetStructure: event.target.checked }))}
+                  style={{ marginRight: '0.6rem' }}
+                />
+                Generate Smartsheet fields automatically from Linear data
+              </label>
+              <span style={{ color: '#64748b', fontSize: '0.95rem' }}>
+                With automatic generation on, the backend will locate matching columns by title or create the missing destination fields in your sheet.
+              </span>
+            </div>
 
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Linear API key</span>
-            <input
-              type="password"
-              value={form.linearApiKey}
-              onChange={(event) => setForm((current) => ({ ...current, linearApiKey: event.target.value }))}
-              placeholder={config.hasLinearApiKey ? 'Stored. Enter a new value only to replace it.' : 'lin_api_...'}
-              style={inputStyle}
-            />
-          </label>
+            <div style={{ display: 'grid', gap: '0.9rem', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Render base URL</span>
+                <input
+                  type="text"
+                  value={form.publicBaseUrl}
+                  onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
+                  placeholder="https://your-service.onrender.com"
+                  style={inputStyle}
+                />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((current) => ({ ...current, publicBaseUrl: currentOrigin }));
+                      setMessage({ tone: 'success', text: `Render base URL set to ${currentOrigin}. Click Save settings.` });
+                    }}
+                    style={ghostButtonStyle}
+                  >
+                    Use current app URL
+                  </button>
+                </div>
+                <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
+                  Stored and used to generate the exact webhook URL for Linear.
+                </span>
+              </label>
 
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Smartsheet API key</span>
-            <input
-              type="password"
-              value={form.smartsheetApiKey}
-              onChange={(event) => setForm((current) => ({ ...current, smartsheetApiKey: event.target.value }))}
-              placeholder={config.hasSmartsheetApiKey ? 'Stored. Enter a new value only to replace it.' : 'Smartsheet token'}
-              style={inputStyle}
-            />
-          </label>
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Linear API key</span>
+                <input
+                  type="password"
+                  value={form.linearApiKey}
+                  onChange={(event) => setForm((current) => ({ ...current, linearApiKey: event.target.value }))}
+                  placeholder={config.hasLinearApiKey ? 'Stored. Enter a new value only to replace it.' : 'lin_api_...'}
+                  style={inputStyle}
+                />
+              </label>
 
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Smartsheet sheet ID</span>
-            <input
-              type="text"
-              value={form.smartsheetSheetId}
-              onChange={(event) => setForm((current) => ({ ...current, smartsheetSheetId: event.target.value }))}
-              placeholder="1234567890123456"
-              style={inputStyle}
-            />
-          </label>
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Smartsheet API key</span>
+                <input
+                  type="password"
+                  value={form.smartsheetApiKey}
+                  onChange={(event) => setForm((current) => ({ ...current, smartsheetApiKey: event.target.value }))}
+                  placeholder={config.hasSmartsheetApiKey ? 'Stored. Enter a new value only to replace it.' : 'Smartsheet token'}
+                  style={inputStyle}
+                />
+              </label>
 
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Webhook token</span>
-            <input
-              type="text"
-              value={form.webhookToken}
-              onChange={(event) => setForm((current) => ({ ...current, webhookToken: event.target.value }))}
-              placeholder="Shared secret appended to the webhook URL"
-              style={inputStyle}
-            />
-          </label>
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Smartsheet sheet ID</span>
+                <input
+                  type="text"
+                  value={form.smartsheetSheetId}
+                  onChange={(event) => setForm((current) => ({ ...current, smartsheetSheetId: event.target.value }))}
+                  placeholder="1234567890123456"
+                  style={inputStyle}
+                />
+              </label>
 
-          <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-            <span style={{ fontWeight: 700 }}>Change access password</span>
-            <input
-              type="password"
-              value={form.accessPassword}
-              onChange={(event) => setForm((current) => ({ ...current, accessPassword: event.target.value }))}
-              placeholder="Optional. Leave blank to keep the current password."
-              style={inputStyle}
-            />
-          </label>
-        </div>
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Webhook token</span>
+                <input
+                  type="text"
+                  value={form.webhookToken}
+                  onChange={(event) => setForm((current) => ({ ...current, webhookToken: event.target.value }))}
+                  placeholder="Shared secret appended to the webhook URL"
+                  style={inputStyle}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>Change access password</span>
+                <input
+                  type="password"
+                  value={form.accessPassword}
+                  onChange={(event) => setForm((current) => ({ ...current, accessPassword: event.target.value }))}
+                  placeholder="Optional. Leave blank to keep the current password."
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+          </>
+        )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <button type="button" onClick={() => void saveConfig()} disabled={busyAction !== null || isLoading} style={primaryButtonStyle}>
-            {busyAction === 'save' ? 'Saving...' : 'Save settings'}
-          </button>
+          {isSettingsLocked ? (
+            <button type="button" onClick={() => setAllowSettingsEdit(true)} disabled={busyAction !== null || isLoading} style={primaryButtonStyle}>
+              Unlock settings for edits
+            </button>
+          ) : (
+            <button type="button" onClick={() => void saveConfig()} disabled={busyAction !== null || isLoading} style={primaryButtonStyle}>
+              {busyAction === 'save' ? 'Saving...' : 'Save settings'}
+            </button>
+          )}
           <button type="button" onClick={() => void runConnectionTest()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
             {busyAction === 'test' ? 'Testing...' : 'Test connections'}
           </button>
-          <button type="button" onClick={() => void generateStructure()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
-            {busyAction === 'generate' ? 'Generating...' : 'Generate Smartsheet fields'}
-          </button>
-          <button type="button" onClick={() => void runSampleSync()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
-            {busyAction === 'sample' ? 'Syncing...' : 'Send sample sync'}
-          </button>
+          {!isSettingsLocked ? (
+            <button type="button" onClick={() => void generateStructure()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
+              {busyAction === 'generate' ? 'Generating...' : 'Generate Smartsheet fields'}
+            </button>
+          ) : null}
+          {!isSettingsLocked ? (
+            <button type="button" onClick={() => void runSampleSync()} disabled={busyAction !== null || isLoading} style={secondaryButtonStyle}>
+              {busyAction === 'sample' ? 'Syncing...' : 'Send sample sync'}
+            </button>
+          ) : null}
           <button type="button" onClick={() => void refreshStatus()} disabled={busyAction !== null} style={ghostButtonStyle}>
             {busyAction === 'refresh' ? 'Refreshing...' : 'Refresh status'}
           </button>
           <button type="button" onClick={lockPage} disabled={busyAction !== null} style={ghostButtonStyle}>
             Lock page
           </button>
+          {isAutoSavingBaseUrl ? <span style={{ color: '#64748b', fontSize: '0.92rem' }}>Saving current Render URL...</span> : null}
         </div>
       </section>
 
@@ -660,27 +735,29 @@ export function LinearSmartsheetPage() {
         </div>
       </section>
 
-      <section style={panelStyle}>
-        <h3 style={{ margin: 0, color: '#0f172a' }}>Smartsheet field mapping</h3>
-        <p style={{ margin: 0, color: '#475569', lineHeight: 1.55 }}>
-          These column IDs are optional when auto-generation is enabled. Use them only if you want to override the automatically located or created fields.
-        </p>
-        <div style={{ display: 'grid', gap: '0.9rem', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          {columnFields.map((field) => (
-            <label key={field.key} style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
-              <span style={{ fontWeight: 700 }}>{field.label}</span>
-              <input
-                type="text"
-                value={form.smartsheetColumnMap[field.key]}
-                onChange={(event) => updateColumn(field.key, event.target.value)}
-                placeholder="Smartsheet column ID"
-                style={inputStyle}
-              />
-              <span style={{ color: '#64748b', fontSize: '0.9rem' }}>{field.hint}</span>
-            </label>
-          ))}
-        </div>
-      </section>
+      {!isSettingsLocked ? (
+        <section style={panelStyle}>
+          <h3 style={{ margin: 0, color: '#0f172a' }}>Smartsheet field mapping</h3>
+          <p style={{ margin: 0, color: '#475569', lineHeight: 1.55 }}>
+            These column IDs are optional when auto-generation is enabled. Use them only if you want to override the automatically located or created fields.
+          </p>
+          <div style={{ display: 'grid', gap: '0.9rem', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            {columnFields.map((field) => (
+              <label key={field.key} style={{ display: 'grid', gap: '0.35rem', color: '#0f172a' }}>
+                <span style={{ fontWeight: 700 }}>{field.label}</span>
+                <input
+                  type="text"
+                  value={form.smartsheetColumnMap[field.key]}
+                  onChange={(event) => updateColumn(field.key, event.target.value)}
+                  placeholder="Smartsheet column ID"
+                  style={inputStyle}
+                />
+                <span style={{ color: '#64748b', fontSize: '0.9rem' }}>{field.hint}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section style={panelStyle}>
         <h3 style={{ margin: 0, color: '#0f172a' }}>Status</h3>
