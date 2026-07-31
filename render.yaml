@@ -21,6 +21,12 @@ services:
         value: https://api.cal.com
       - key: CAL_COM_EVENT_TYPES_PATH
         value: /v2/event-types
+      - key: CAL_COM_BOOKINGS_PATH
+        value: /v2/bookings
+      - key: CAL_COM_DEFAULT_ATTENDEE_NAME
+        value: Dispatch Client
+      - key: CAL_COM_DEFAULT_ATTENDEE_EMAIL
+        value: dispatch@example.com
     disks:
       - name: linear-sync-data
         mountPath: /var/data

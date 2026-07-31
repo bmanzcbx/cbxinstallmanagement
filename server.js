@@ -7,7 +7,7 @@ const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmart
 const dispatchService = require(path.join(__dirname, 'src', 'dispatchService.js'));
 const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings } = bookingService;
 const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, getStatus, testConnections, generateSmartsheetStructure, processLinearEvent, processSampleEvent } = linearSmartsheetService;
-const { generateIntelligentSetupLink } = dispatchService;
+const { generateIntelligentSetupLink, reserveMultiDayProjectDispatch } = dispatchService;
 const distDirectory = path.join(__dirname, 'dist');
 const distIndexFile = path.join(distDirectory, 'index.html');
 
@@ -250,6 +250,36 @@ app.post('/api/dispatch/route-setup', async (req, res) => {
       success: false,
       fallbackToManualDispatch: true,
       message: error?.message || 'Unable to generate an intelligent setup link.',
+    });
+  }
+});
+
+app.post('/api/dispatch/book-multi-day', async (req, res) => {
+  try {
+    const zip = String(req.body?.zip || '').trim();
+    const product = String(req.body?.product || '').trim();
+    const startDate = String(req.body?.startDate || '').trim();
+    const totalDays = Number(req.body?.totalDays || 0);
+
+    if (!zip || !product || !startDate || !Number.isInteger(totalDays) || totalDays < 1) {
+      return res.status(400).json({
+        success: false,
+        fallbackToManualDispatch: true,
+        message: 'zip, product, startDate, and an integer totalDays >= 1 are required.',
+      });
+    }
+
+    const bookingsResult = await getBookings();
+    const bookings = bookingsResult?.success && Array.isArray(bookingsResult.data) ? bookingsResult.data : [];
+
+    const result = await reserveMultiDayProjectDispatch({ zip, product, startDate, totalDays }, { bookings });
+    res.json(result);
+  } catch (error) {
+    console.error('Dispatch multi-day booking failure', error);
+    res.status(400).json({
+      success: false,
+      fallbackToManualDispatch: true,
+      message: error?.message || 'Unable to reserve multi-day project blocks.',
     });
   }
 });

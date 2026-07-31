@@ -13,6 +13,10 @@ type BookingResult = {
 type DispatchResult = {
   success: boolean;
   bookingUrl?: string;
+  bookingUrls?: string[];
+  activeBlockIds?: Array<string | number>;
+  scheduledDays?: string[];
+  totalWorkingDays?: number;
   territory?: string;
   assignedTeam?: {
     manager: string;
@@ -174,6 +178,8 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
   }>(null);
   const [dispatchZip, setDispatchZip] = useState('');
   const [dispatchProduct, setDispatchProduct] = useState('');
+  const [dispatchStartDate, setDispatchStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dispatchTotalDays, setDispatchTotalDays] = useState(5);
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<DispatchResult | null>(null);
   const calendarRef = useRef<HTMLDivElement | null>(null);
@@ -1196,6 +1202,55 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
     }
   };
 
+  const reserveMultiDayDispatch = async () => {
+    setIsDispatching(true);
+    setDispatchResult(null);
+
+    try {
+      const response = await fetch(getApiUrl('/api/dispatch/book-multi-day'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          zip: dispatchZip,
+          product: dispatchProduct,
+          startDate: dispatchStartDate,
+          totalDays: Number(dispatchTotalDays) || 0,
+        }),
+      });
+
+      const payload = await readJsonResponse(response);
+      if (!response.ok || !payload?.success) {
+        const message = payload?.message || 'Unable to reserve multi-day blocks.';
+        setDispatchResult({ success: false, message });
+        setResult({ success: false, message });
+        return;
+      }
+
+      const nextResult: DispatchResult = {
+        success: true,
+        bookingUrl: payload.bookingUrl,
+        bookingUrls: Array.isArray(payload.bookingUrls) ? payload.bookingUrls : [],
+        activeBlockIds: Array.isArray(payload.activeBlockIds) ? payload.activeBlockIds : [],
+        scheduledDays: Array.isArray(payload.scheduledDays) ? payload.scheduledDays : [],
+        totalWorkingDays: typeof payload.totalWorkingDays === 'number' ? payload.totalWorkingDays : undefined,
+        territory: payload.territory,
+        assignedTeam: payload.assignedTeam,
+      };
+
+      setDispatchResult(nextResult);
+      setResult({
+        success: true,
+        message: `Reserved ${nextResult.totalWorkingDays || nextResult.bookingUrls?.length || 0} workday blocks in Cal.com.`,
+      });
+    } catch (error) {
+      const message = 'Unable to reach multi-day dispatch routing service.';
+      setDispatchResult({ success: false, message });
+      setResult({ success: false, message });
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
   useEffect(() => {
     const handleGlobalWheel = (event: WheelEvent) => {
       if (!ganttChartHovered || event.ctrlKey || !ganttZoomLocked) {
@@ -2061,7 +2116,7 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 800, color: pageSetup.textColor }}>Dispatch Routing (Cal.com)</div>
           <div style={{ fontSize: '0.78rem', color: pageSetup.mutedTextColor }}>
-            Generate an intelligent setup link by ZIP + product. This does not push anything into Smartsheet.
+            Generate an intelligent setup link or reserve a multi-day project block by ZIP + product. This does not push anything into Smartsheet.
           </div>
           <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <input
@@ -2076,6 +2131,23 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
               placeholder="Product model"
               style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '0.65rem', padding: '0.55rem 0.65rem', fontSize: '0.82rem', color: '#0f172a' }}
             />
+            <input
+              type="date"
+              value={dispatchStartDate}
+              onChange={(event) => setDispatchStartDate(event.target.value)}
+              style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '0.65rem', padding: '0.55rem 0.65rem', fontSize: '0.82rem', color: '#0f172a' }}
+            />
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={dispatchTotalDays}
+              onChange={(event) => setDispatchTotalDays(Math.max(1, Math.min(30, Number(event.target.value) || 1)))}
+              placeholder="Total project days"
+              style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '0.65rem', padding: '0.55rem 0.65rem', fontSize: '0.82rem', color: '#0f172a' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             <button
               type="button"
               onClick={() => void generateDispatchLink()}
@@ -2084,16 +2156,41 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
             >
               {isDispatching ? 'Generating...' : 'Generate setup link'}
             </button>
+            <button
+              type="button"
+              onClick={() => void reserveMultiDayDispatch()}
+              disabled={isDispatching}
+              style={{ border: 'none', borderRadius: '0.65rem', background: 'linear-gradient(135deg, #1d4ed8, #4338ca)', color: 'white', padding: '0.55rem 0.75rem', fontSize: '0.8rem', fontWeight: 800, cursor: isDispatching ? 'default' : 'pointer' }}
+            >
+              {isDispatching ? 'Reserving...' : 'Reserve multi-day block'}
+            </button>
           </div>
-          {dispatchResult?.success && dispatchResult.bookingUrl ? (
+          {dispatchResult?.success ? (
             <div style={{ display: 'grid', gap: '0.3rem', padding: '0.55rem', borderRadius: '0.65rem', border: '1px solid rgba(16,185,129,0.25)', background: '#ecfdf5' }}>
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>
                 Team: {dispatchResult.assignedTeam?.manager || 'Manager'} + {dispatchResult.assignedTeam?.technician || 'Technician'}
               </div>
               <div style={{ fontSize: '0.78rem', color: '#065f46' }}>Territory: {dispatchResult.territory || 'Unknown'}</div>
-              <a href={dispatchResult.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 700, wordBreak: 'break-all' }}>
-                {dispatchResult.bookingUrl}
-              </a>
+              {dispatchResult.bookingUrl ? (
+                <a href={dispatchResult.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 700, wordBreak: 'break-all' }}>
+                  {dispatchResult.bookingUrl}
+                </a>
+              ) : null}
+              {dispatchResult.totalWorkingDays ? (
+                <div style={{ fontSize: '0.78rem', color: '#065f46' }}>Reserved days: {dispatchResult.totalWorkingDays}</div>
+              ) : null}
+              {dispatchResult.bookingUrls?.length ? (
+                <details>
+                  <summary style={{ cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700, color: '#065f46' }}>View day-by-day booking URLs</summary>
+                  <div style={{ display: 'grid', gap: '0.25rem', marginTop: '0.35rem' }}>
+                    {dispatchResult.bookingUrls.map((url) => (
+                      <a key={url} href={url} target="_blank" rel="noreferrer" style={{ fontSize: '0.74rem', color: '#1d4ed8', wordBreak: 'break-all' }}>
+                        {url}
+                      </a>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
           ) : null}
           {dispatchResult && !dispatchResult.success ? (
