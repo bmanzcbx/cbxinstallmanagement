@@ -1,37 +1,11 @@
 {
-  "name": "cohort-scheduler",
+  "name": "linear2smartsheet-listener",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "start": "node server.js",
-    "preview": "vite preview",
-    "prisma:generate": "prisma generate",
-    "postinstall": "prisma generate"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
-    "@types/node": "^26.1.2",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "typescript": "^7.0.2",
-    "vite": "^8.1.5"
+    "start": "node server.js"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.9.1",
-    "@prisma/client": "^7.9.1",
-    "cors": "^2.8.6",
-    "date-fns": "^4.4.0",
-    "express": "^5.2.1",
-    "pg": "^8.22.0",
-    "prisma": "^7.9.1",
-    "react-day-picker": "^10.0.1"
+    "express": "^4.21.2"
   }
 }

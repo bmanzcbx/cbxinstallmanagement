@@ -1,6 +1,10 @@
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const dataDirectory = process.env.LINEAR_SYNC_DATA_DIR
   ? path.resolve(process.env.LINEAR_SYNC_DATA_DIR)
@@ -16,6 +20,8 @@ const defaultColumnMap = {
   state: '',
   url: '',
   updatedAt: '',
+  targetDate: '',
+  dueDate: '',
   kind: '',
   action: '',
   project: '',
@@ -31,6 +37,8 @@ const defaultColumnDefinitions = {
   state: { title: 'State', type: 'TEXT_NUMBER' },
   url: { title: 'Linear URL', type: 'TEXT_NUMBER' },
   updatedAt: { title: 'Updated At', type: 'TEXT_NUMBER' },
+  targetDate: { title: 'Target Date', type: 'TEXT_NUMBER' },
+  dueDate: { title: 'Due Date', type: 'TEXT_NUMBER' },
   kind: { title: 'Kind', type: 'TEXT_NUMBER' },
   action: { title: 'Action', type: 'TEXT_NUMBER' },
   project: { title: 'Project', type: 'TEXT_NUMBER' },
@@ -416,6 +424,8 @@ function normalizeLinearPayload(payload) {
   const linearId = pickFirstTextValue([entity.id, entity.identifier, payload?.id]);
   const title = pickFirstTextValue([entity.title, entity.name]) || '(untitled)';
   const updatedAt = pickFirstTextValue([entity.updatedAt, payload?.updatedAt]) || new Date().toISOString();
+  const targetDate = pickFirstTextValue([entity.targetDate, entity.targetDateAt, entity.project?.targetDate, entity.project?.targetDateAt]);
+  const dueDate = pickFirstTextValue([entity.dueDate, entity.dueAt, entity.project?.dueDate, entity.project?.dueAt]);
   const url = pickFirstTextValue([entity.url]);
   const team = pickFirstTextValue([entity.team?.name, entity.team?.displayName, entity.team?.key]);
   const safeRawPayload = toTextValue(payload).slice(0, 4000);
@@ -426,6 +436,8 @@ function normalizeLinearPayload(payload) {
     state: stateName,
     url,
     updatedAt,
+    targetDate,
+    dueDate,
     kind: entityType,
     action,
     project: projectName,
@@ -443,6 +455,8 @@ function buildCellValueMap(record) {
     state: record.state,
     url: record.url,
     updatedAt: record.updatedAt,
+    targetDate: record.targetDate,
+    dueDate: record.dueDate,
     kind: record.kind,
     action: record.action,
     project: record.project,
@@ -787,6 +801,8 @@ async function processSampleEvent() {
         title: 'Sample Linear issue sync',
         url: 'https://linear.app/',
         updatedAt: new Date().toISOString(),
+        targetDate: '2026-08-15',
+        dueDate: '2026-08-20',
         state: { name: 'In Progress' },
         project: { name: 'Operations' },
         assignee: { name: 'Automation Bot' },
@@ -798,7 +814,7 @@ async function processSampleEvent() {
   );
 }
 
-module.exports = {
+export {
   getConfig,
   saveConfig,
   getAuthStatus,

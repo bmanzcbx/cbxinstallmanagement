@@ -1,11 +1,16 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-
-const bookingService = require(path.join(__dirname, 'src', 'bookingService.js'));
-const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmartsheetService.js'));
-const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings } = bookingService;
-const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, getStatus, testConnections, generateSmartsheetStructure, processLinearEvent, processSampleEvent } = linearSmartsheetService;
+import express from 'express';
+import {
+  getConfig,
+  saveConfig,
+  getAuthStatus,
+  unlockAccess,
+  assertAuthorized,
+  getStatus,
+  testConnections,
+  generateSmartsheetStructure,
+  processLinearEvent,
+  processSampleEvent,
+} from './src/linearSmartsheetService.js';
 
 function getLinearSyncSessionToken(req) {
   return req.headers['x-linear-sync-session'] || req.query.sessionToken || null;
@@ -21,109 +26,21 @@ function requireLinearSyncAccess(req, res, next) {
 }
 
 const app = express();
-app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-linear-sync-session, x-webhook-token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 app.use(express.json());
 
 app.get('/healthz', (req, res) => {
   res.status(200).json({ ok: true });
-});
-
-app.get('/api/bookings', async (req, res) => {
-  if (!getBookings) {
-    return res.status(503).json({ success: false, message: 'Booking service unavailable.' });
-  }
-
-  try {
-    const result = await getBookings();
-    res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Unable to load bookings.' });
-  }
-});
-
-app.get('/api/bookings/export', async (req, res) => {
-  try {
-    const format = req.query.format === 'csv' ? 'csv' : 'json';
-    const payload = await exportBookings(format);
-
-    if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="bookings.csv"');
-      res.send(payload);
-      return;
-    }
-
-    res.json({ success: true, data: payload });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Unable to export bookings.' });
-  }
-});
-
-app.post('/api/bookings', async (req, res) => {
-  if (!createBooking) {
-    return res.status(503).json({ success: false, message: 'Booking service unavailable.' });
-  }
-
-  try {
-    const { roomId, start, end, clientName = '', location = '', botCount = 0 } = req.body;
-    const result = await createBooking(roomId, new Date(start), new Date(end), {
-      clientName,
-      location,
-      botCount: Number(botCount) || 0,
-    });
-    res.json({
-      ...result,
-      message: result.success
-        ? 'Booking request submitted. Awaiting admin approval.'
-        : result.message || 'Booking request failed.',
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: 'Booking service error.',
-      error: error?.message || String(error),
-      code: error?.code || null,
-    });
-  }
-});
-
-app.patch('/api/bookings/:id', async (req, res) => {
-  if (!updateBookingDates) {
-    return res.status(503).json({ success: false, message: 'Booking service unavailable.' });
-  }
-
-  try {
-    const { id } = req.params;
-    const { start, end } = req.body;
-    const result = await updateBookingDates(id, new Date(start), new Date(end));
-    res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Unable to update booking.' });
-  }
-});
-
-app.patch('/api/bookings/:id/details', async (req, res) => {
-  if (!updateBookingDetails) {
-    return res.status(503).json({ success: false, message: 'Booking service unavailable.' });
-  }
-
-  try {
-    const { id } = req.params;
-    const { clientName, location, botCount } = req.body;
-    const result = await updateBookingDetails(id, {
-      clientName,
-      location,
-      botCount: Number(botCount) || 0,
-    });
-    res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Unable to update booking details.' });
-  }
 });
 
 app.get('/api/integrations/linear-smartsheet/auth-status', async (req, res) => {
@@ -225,5 +142,5 @@ app.post('/api/integrations/linear-smartsheet/webhook', async (req, res) => {
 const port = Number(process.env.PORT) || 3001;
 
 app.listen(port, () => {
-  console.log(`Booking API listening on http://localhost:${port}`);
+  console.log(`Linear listener API listening on http://localhost:${port}`);
 });

@@ -6,6 +6,8 @@ type ColumnMap = {
   state: string;
   url: string;
   updatedAt: string;
+  targetDate: string;
+  dueDate: string;
   kind: string;
   action: string;
   project: string;
@@ -90,6 +92,8 @@ const emptyColumnMap: ColumnMap = {
   state: '',
   url: '',
   updatedAt: '',
+  targetDate: '',
+  dueDate: '',
   kind: '',
   action: '',
   project: '',
@@ -120,6 +124,8 @@ const columnFields: Array<{ key: keyof ColumnMap; label: string; hint: string }>
   { key: 'state', label: 'State column', hint: 'Current workflow state.' },
   { key: 'url', label: 'URL column', hint: 'Linear link.' },
   { key: 'updatedAt', label: 'Updated At column', hint: 'Last update timestamp from Linear.' },
+  { key: 'targetDate', label: 'Target Date column', hint: 'Linear target date for issues or projects when present.' },
+  { key: 'dueDate', label: 'Due Date column', hint: 'Linear due date when present.' },
   { key: 'kind', label: 'Kind column', hint: 'Issue or Project.' },
   { key: 'action', label: 'Action column', hint: 'create, update, or another webhook action.' },
   { key: 'project', label: 'Project column', hint: 'Linked project name when present.' },
