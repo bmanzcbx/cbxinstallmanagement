@@ -366,29 +366,73 @@ function getHeaderValue(headers, headerName) {
   return matchingKey ? headers[matchingKey] : undefined;
 }
 
+function toTextValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return String(value);
+  }
+}
+
+function pickFirstTextValue(candidates) {
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) {
+      continue;
+    }
+
+    const text = toTextValue(candidate).trim();
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
 function normalizeLinearPayload(payload) {
   const entity = payload?.data || payload?.issue || payload?.project || payload || {};
-  const projectName = entity.project?.name || entity.project?.title || entity.project?.slug || '';
-  const assigneeName = entity.assignee?.name || entity.assignee?.displayName || entity.assignee?.email || '';
-  const stateName = entity.state?.name || entity.state?.label || entity.status || '';
-  const priorityValue = entity.priorityLabel || entity.priority || '';
-  const entityType = payload?.type || entity.objectType || (entity.identifier ? 'Issue' : 'Project');
-  const action = payload?.action || payload?.event || payload?.trigger || 'update';
-  const linearId = entity.id || entity.identifier || payload?.id || '';
+  const projectName = pickFirstTextValue([entity.project?.name, entity.project?.title, entity.project?.slug]);
+  const assigneeName = pickFirstTextValue([entity.assignee?.name, entity.assignee?.displayName, entity.assignee?.email]);
+  const stateName = pickFirstTextValue([entity.state?.name, entity.state?.label, entity.status?.name, entity.status]);
+  const priorityValue = pickFirstTextValue([entity.priorityLabel, entity.priority?.label, entity.priority?.name, entity.priority]);
+  const entityType = pickFirstTextValue([payload?.type, entity.objectType, entity.identifier ? 'Issue' : 'Project']) || 'Issue';
+  const action = pickFirstTextValue([payload?.action, payload?.event, payload?.trigger]) || 'update';
+  const linearId = pickFirstTextValue([entity.id, entity.identifier, payload?.id]);
+  const title = pickFirstTextValue([entity.title, entity.name]) || '(untitled)';
+  const updatedAt = pickFirstTextValue([entity.updatedAt, payload?.updatedAt]) || new Date().toISOString();
+  const url = pickFirstTextValue([entity.url]);
+  const team = pickFirstTextValue([entity.team?.name, entity.team?.displayName, entity.team?.key]);
+  const safeRawPayload = toTextValue(payload).slice(0, 4000);
 
   return {
     linearId,
-    title: entity.title || entity.name || '(untitled)',
+    title,
     state: stateName,
-    url: entity.url || '',
-    updatedAt: entity.updatedAt || payload?.updatedAt || new Date().toISOString(),
+    url,
+    updatedAt,
     kind: entityType,
     action,
     project: projectName,
     assignee: assigneeName,
-    team: entity.team?.name || '',
-    priority: priorityValue === '' ? '' : String(priorityValue),
-    rawPayload: JSON.stringify(payload).slice(0, 4000),
+    team,
+    priority: priorityValue,
+    rawPayload: safeRawPayload,
   };
 }
 
@@ -547,11 +591,19 @@ function buildSmartsheetCells(config, record) {
   const cellValues = buildCellValueMap(record);
   return Object.entries(config.smartsheetColumnMap || {})
     .filter(([, columnId]) => String(columnId || '').trim())
-    .map(([field, columnId]) => ({
-      columnId: Number(columnId),
-      value: cellValues[field] ?? '',
-      strict: false,
-    }));
+    .map(([field, columnId]) => {
+      const numericColumnId = Number(String(columnId).trim());
+      if (!Number.isFinite(numericColumnId)) {
+        return null;
+      }
+
+      return {
+        columnId: numericColumnId,
+        value: toTextValue(cellValues[field]),
+        strict: false,
+      };
+    })
+    .filter(Boolean);
 }
 
 function findExistingRow(sheet, linearIdColumnId, linearId) {
