@@ -6,6 +6,8 @@ const bookingService = require(path.join(__dirname, 'src', 'bookingService.js'))
 const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmartsheetService.js'));
 const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings } = bookingService;
 const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, getStatus, testConnections, generateSmartsheetStructure, processLinearEvent, processSampleEvent } = linearSmartsheetService;
+const distDirectory = path.join(__dirname, 'dist');
+const distIndexFile = path.join(distDirectory, 'index.html');
 
 function getLinearSyncSessionToken(req) {
   return req.headers['x-linear-sync-session'] || req.query.sessionToken || null;
@@ -220,6 +222,12 @@ app.post('/api/integrations/linear-smartsheet/webhook', async (req, res) => {
     const isAuthError = String(error?.message || '').toLowerCase().includes('token');
     res.status(isAuthError ? 401 : 400).json({ success: false, message: error?.message || 'Webhook processing failed.' });
   }
+});
+
+app.use(express.static(distDirectory));
+
+app.get(/^(?!\/api(?:\/|$)).*/, (req, res) => {
+  res.sendFile(distIndexFile);
 });
 
 const port = Number(process.env.PORT) || 3001;
