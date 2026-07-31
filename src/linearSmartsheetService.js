@@ -45,6 +45,21 @@ function getManagedWebhookToken() {
   return typeof envToken === 'string' ? envToken.trim() : '';
 }
 
+function getManagedLinearApiKey() {
+  const envValue = process.env.LINEAR_API_KEY;
+  return typeof envValue === 'string' ? envValue.trim() : '';
+}
+
+function getManagedSmartsheetApiKey() {
+  const envValue = process.env.SMARTSHEET_API_KEY;
+  return typeof envValue === 'string' ? envValue.trim() : '';
+}
+
+function getManagedSmartsheetSheetId() {
+  const envValue = process.env.SMARTSHEET_SHEET_ID;
+  return typeof envValue === 'string' ? envValue.trim() : '';
+}
+
 function getManagedSyncEnabled() {
   const rawValue = process.env.LINEAR_SYNC_ENABLED;
   if (typeof rawValue !== 'string') {
@@ -63,6 +78,16 @@ function getManagedSyncEnabled() {
 
 function resolveWebhookToken(config) {
   return getManagedWebhookToken() || String(config?.webhookToken || '').trim();
+}
+
+function applyManagedConfig(config) {
+  return {
+    ...config,
+    linearApiKey: getManagedLinearApiKey() || String(config?.linearApiKey || '').trim(),
+    smartsheetApiKey: getManagedSmartsheetApiKey() || String(config?.smartsheetApiKey || '').trim(),
+    smartsheetSheetId: getManagedSmartsheetSheetId() || String(config?.smartsheetSheetId || '').trim(),
+    webhookToken: resolveWebhookToken(config),
+  };
 }
 
 function createDefaultConfig() {
@@ -125,38 +150,44 @@ async function getStoredConfig() {
   if (!stored) {
     const defaultConfig = createDefaultConfig();
     await writeJsonFile(configFilePath, defaultConfig);
-    return defaultConfig;
+    return applyManagedConfig(defaultConfig);
   }
 
-  return {
+  return applyManagedConfig({
     ...createDefaultConfig(),
     ...stored,
     smartsheetColumnMap: {
       ...defaultColumnMap,
       ...(stored.smartsheetColumnMap || {}),
     },
-  };
+  });
 }
 
 function sanitizeConfig(config) {
   const managedWebhookToken = getManagedWebhookToken();
   const managedSyncEnabled = getManagedSyncEnabled();
   const resolvedWebhookToken = resolveWebhookToken(config);
+  const managedLinearApiKey = getManagedLinearApiKey();
+  const managedSmartsheetApiKey = getManagedSmartsheetApiKey();
+  const managedSmartsheetSheetId = getManagedSmartsheetSheetId();
   return {
     enabled: managedSyncEnabled === null ? Boolean(config.enabled) : managedSyncEnabled,
     enabledManaged: managedSyncEnabled !== null,
     autoGenerateSheetStructure: config.autoGenerateSheetStructure !== false,
     publicBaseUrl: config.publicBaseUrl || '',
-    smartsheetSheetId: config.smartsheetSheetId || '',
+    smartsheetSheetId: managedSmartsheetSheetId || config.smartsheetSheetId || '',
     webhookToken: resolvedWebhookToken,
     webhookTokenManaged: Boolean(managedWebhookToken),
+    linearApiKeyManaged: Boolean(managedLinearApiKey),
+    smartsheetApiKeyManaged: Boolean(managedSmartsheetApiKey),
+    smartsheetSheetIdManaged: Boolean(managedSmartsheetSheetId),
     webhookUrlPath: '/api/integrations/linear-smartsheet/webhook',
     smartsheetColumnMap: {
       ...defaultColumnMap,
       ...(config.smartsheetColumnMap || {}),
     },
-    hasLinearApiKey: Boolean(config.linearApiKey),
-    hasSmartsheetApiKey: Boolean(config.smartsheetApiKey),
+    hasLinearApiKey: Boolean(managedLinearApiKey || config.linearApiKey),
+    hasSmartsheetApiKey: Boolean(managedSmartsheetApiKey || config.smartsheetApiKey),
     hasAccessPassword: Boolean(config.accessPasswordHash),
     createdAt: config.createdAt || null,
     updatedAt: config.updatedAt || null,
