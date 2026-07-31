@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
   --bg-0: #f3f8f6;
@@ -27,7 +27,7 @@
 
 body {
   margin: 0;
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: 'Manrope', sans-serif;
   color: var(--ink-0);
   background:
     radial-gradient(1200px 520px at 5% -10%, rgba(12, 123, 168, 0.2), transparent 55%),
@@ -91,7 +91,7 @@ body {
 
 .brand-title {
   margin: 0;
-  font: 800 1.32rem/1.2 'Sora', sans-serif;
+  font: 700 1.4rem/1.2 'Space Grotesk', sans-serif;
   letter-spacing: 0.01em;
 }
 
@@ -110,11 +110,12 @@ body {
 
 .nav-btn {
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.8);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(249, 252, 252, 0.9));
   color: var(--ink-1);
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-radius: 999px;
-  font: 700 0.86rem/1 'Sora', sans-serif;
+  font: 700 0.84rem/1 'Space Grotesk', sans-serif;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition: all 180ms ease;
 }
@@ -128,6 +129,15 @@ body {
   border-color: transparent;
   background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
   color: #fff;
+  box-shadow: 0 10px 24px rgba(4, 108, 78, 0.25);
+}
+
+.nav-btn:focus-visible,
+.action-btn:focus-visible,
+.modal-btn:focus-visible,
+.admin-trigger:focus-visible {
+  outline: 2px solid rgba(12, 123, 168, 0.45);
+  outline-offset: 2px;
 }
 
 .app-content {
@@ -142,6 +152,31 @@ body {
 .command-center {
   display: grid;
   gap: 12px;
+}
+
+.hero-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background:
+    radial-gradient(540px 220px at 10% -20%, rgba(12, 123, 168, 0.2), transparent 50%),
+    radial-gradient(520px 200px at 100% -20%, rgba(4, 108, 78, 0.18), transparent 48%),
+    var(--card-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-title {
+  margin: 0;
+  font: 700 1.18rem/1.22 'Space Grotesk', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.hero-copy {
+  margin: 8px 0 0;
+  max-width: 82ch;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .kpi-grid {
@@ -168,7 +203,7 @@ body {
 
 .kpi-value {
   margin-top: 5px;
-  font: 800 1.55rem/1.1 'Sora', sans-serif;
+  font: 700 1.62rem/1.1 'Space Grotesk', sans-serif;
 }
 
 .kpi-note {
@@ -202,7 +237,7 @@ body {
 
 .panel-title {
   margin: 0;
-  font: 700 0.98rem/1.2 'Sora', sans-serif;
+  font: 700 1rem/1.2 'Space Grotesk', sans-serif;
 }
 
 .panel-body {
@@ -274,8 +309,15 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  font: 600 0.82rem/1.2 'IBM Plex Sans', sans-serif;
+  font: 700 0.81rem/1.2 'Manrope', sans-serif;
   background: #fff;
+}
+
+.inline-form input:focus-visible,
+.modal input:focus-visible {
+  border-color: rgba(12, 123, 168, 0.5);
+  box-shadow: 0 0 0 3px rgba(12, 123, 168, 0.16);
+  outline: none;
 }
 
 .action-row {
@@ -285,20 +327,28 @@ body {
 }
 
 .action-btn {
-  border: none;
+  border: 1px solid transparent;
   border-radius: 10px;
   cursor: pointer;
-  padding: 10px 11px;
+  padding: 11px 13px;
   color: #fff;
-  font: 700 0.8rem/1 'Sora', sans-serif;
+  font: 700 0.8rem/1 'Space Grotesk', sans-serif;
+  letter-spacing: 0.02em;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
 .action-btn.primary {
   background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+  box-shadow: 0 10px 24px rgba(4, 108, 78, 0.24);
 }
 
 .action-btn.secondary {
-  background: linear-gradient(135deg, #0f172a, #1f2937);
+  background: linear-gradient(135deg, #0f172a, #1b2f3f);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .action-btn:disabled {
@@ -337,7 +387,7 @@ body {
   border-radius: 999px;
   background: transparent;
   color: rgba(37, 56, 71, 0.42);
-  font: 700 0.74rem/1 'Sora', sans-serif;
+  font: 700 0.74rem/1 'Space Grotesk', sans-serif;
   cursor: pointer;
   padding: 5px 8px;
   transition: all 160ms ease;
@@ -372,7 +422,7 @@ body {
 
 .modal-title {
   margin: 0;
-  font: 700 1rem/1.2 'Sora', sans-serif;
+  font: 700 1rem/1.2 'Space Grotesk', sans-serif;
 }
 
 .modal-copy {
@@ -400,13 +450,28 @@ body {
   padding: 8px 12px;
   cursor: pointer;
   background: #fff;
-  font: 700 0.8rem/1 'Sora', sans-serif;
+  font: 700 0.8rem/1 'Space Grotesk', sans-serif;
 }
 
 .modal-btn.primary {
   border-color: transparent;
   background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
   color: #fff;
+}
+
+.dispatch-lab {
+  display: grid;
+  gap: 12px;
+}
+
+.dispatch-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.1fr 1fr;
+}
+
+.inline-form-2col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (max-width: 1000px) {
@@ -420,6 +485,10 @@ body {
 
   .inline-form {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .dispatch-grid {
+    grid-template-columns: 1fr;
   }
 }
 

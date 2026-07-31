@@ -3,9 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { CohortPicker } from './CohortPicker';
 import { LinearSmartsheetPage } from './LinearSmartsheetPage';
 import { CommandCenter } from './CommandCenter';
+import { DispatchLab } from './DispatchLab';
 import './app-shell.css';
 
-type AppView = 'command-center' | 'scheduler' | 'linear-sync';
+type AppView = 'command-center' | 'scheduler' | 'dispatch-lab' | 'linear-sync';
 const sessionStorageKey = 'linear-sync-session-token';
 const adminSessionStorageKey = 'cleanbotix-admin-session-token';
 
@@ -16,6 +17,10 @@ function getViewFromHash(): AppView {
 
   if (window.location.hash === '#linear-sync') {
     return 'linear-sync';
+  }
+
+  if (window.location.hash === '#dispatch-lab') {
+    return 'dispatch-lab';
   }
 
   return 'command-center';
@@ -29,6 +34,7 @@ function App() {
   const [adminCode, setAdminCode] = React.useState('');
   const [adminMessage, setAdminMessage] = React.useState<string | null>(null);
   const [adminBusy, setAdminBusy] = React.useState(false);
+  const [pendingAdminView, setPendingAdminView] = React.useState<AppView>('linear-sync');
 
   React.useEffect(() => {
     const handleHashChange = () => setView(getViewFromHash());
@@ -115,7 +121,7 @@ function App() {
       setShowAdminPrompt(false);
       setAdminCode('');
       setAdminMessage(null);
-      switchView('linear-sync');
+      switchView(pendingAdminView);
     } catch (error) {
       setAdminMessage(error instanceof Error ? error.message : 'Admin access denied.');
     } finally {
@@ -125,11 +131,15 @@ function App() {
 
   const title = view === 'linear-sync'
     ? 'Linear Sync Administration'
+    : view === 'dispatch-lab'
+      ? 'Dispatch Lab'
     : view === 'scheduler'
       ? 'Scheduling Workspace'
       : 'Operations Command Center';
   const subtitle = view === 'linear-sync'
     ? 'Protected integration controls for Linear to Smartsheet sync.'
+    : view === 'dispatch-lab'
+      ? 'Collective routing, multi-day reservation, and booking response intelligence.'
     : view === 'scheduler'
       ? 'Calendar, Gantt, Capacity, and Installer planning tools.'
       : 'Operational intelligence, dispatch acceleration, and risk triage in one view.';
@@ -162,14 +172,22 @@ function App() {
             type="button"
             onClick={() => switchView('scheduler')}
           >
-            Scheduling Workspace
+            Planning Studio
+          </button>
+          <button
+            className={`nav-btn ${view === 'dispatch-lab' ? 'active' : ''}`}
+            type="button"
+            onClick={() => switchView('dispatch-lab')}
+          >
+            Dispatch Lab
           </button>
         </div>
       </div>
 
       <div className="app-content">
-        {view === 'command-center' ? <CommandCenter openScheduler={() => switchView('scheduler')} /> : null}
+        {view === 'command-center' ? <CommandCenter openScheduler={() => switchView('scheduler')} openDispatchLab={() => switchView('dispatch-lab')} /> : null}
         {view === 'scheduler' ? <CohortPicker /> : null}
+        {view === 'dispatch-lab' ? <DispatchLab /> : null}
         {view === 'linear-sync' ? <LinearSmartsheetPage /> : null}
       </div>
 
@@ -178,6 +196,7 @@ function App() {
           type="button"
           className="admin-trigger"
           onClick={() => {
+            setPendingAdminView('linear-sync');
             setShowAdminPrompt(true);
             setAdminMessage(null);
             setAdminCode('');

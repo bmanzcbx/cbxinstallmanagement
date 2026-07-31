@@ -9,19 +9,6 @@ type BookingItem = {
   endDate: string;
 };
 
-type DispatchResult = {
-  success: boolean;
-  message?: string;
-  bookingUrl?: string;
-  bookingUrls?: string[];
-  assignedTeam?: {
-    manager: string;
-    technician: string;
-  };
-  territory?: string;
-  totalWorkingDays?: number;
-};
-
 function toDate(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -103,18 +90,13 @@ function computeMetrics(bookings: BookingItem[]) {
 
 type CommandCenterProps = {
   openScheduler: () => void;
+  openDispatchLab: () => void;
 };
 
-export function CommandCenter({ openScheduler }: CommandCenterProps) {
+export function CommandCenter({ openScheduler, openDispatchLab }: CommandCenterProps) {
   const [bookings, setBookings] = React.useState<BookingItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [zip, setZip] = React.useState('60611');
-  const [product, setProduct] = React.useState('CBX-Pro');
-  const [startDate, setStartDate] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [totalDays, setTotalDays] = React.useState(5);
-  const [busy, setBusy] = React.useState(false);
-  const [dispatchResult, setDispatchResult] = React.useState<DispatchResult | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -153,41 +135,23 @@ export function CommandCenter({ openScheduler }: CommandCenterProps) {
 
   const metrics = React.useMemo(() => computeMetrics(bookings), [bookings]);
 
-  const runDispatch = async (mode: 'single' | 'multi') => {
-    setBusy(true);
-    setDispatchResult(null);
-
-    try {
-      const path = mode === 'single' ? '/api/dispatch/route-setup' : '/api/dispatch/book-multi-day';
-      const body = mode === 'single'
-        ? { zip, product }
-        : { zip, product, startDate, totalDays: Number(totalDays) || 1, clientName: 'Dispatch Ops', clientEmail: 'dispatch@example.com' };
-
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload?.message || 'Dispatch action failed.');
-      }
-
-      setDispatchResult(payload);
-    } catch (dispatchError) {
-      setDispatchResult({ success: false, message: dispatchError instanceof Error ? dispatchError.message : 'Dispatch action failed.' });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const riskLabel = metrics.conflictCount > 5 ? 'High conflict pressure' : metrics.conflictCount > 0 ? 'Watch conflicts' : 'Schedule healthy';
   const riskClass = metrics.conflictCount > 5 ? 'danger' : metrics.conflictCount > 0 ? 'warn' : 'ok';
 
   return (
     <section className="command-center">
+      <article className="hero-panel">
+        <h2 className="hero-title">Install Operations Nerve Center</h2>
+        <p className="hero-copy">
+          Coordinate schedule reliability, field capacity, and dispatch readiness from one surface.
+          Use this page for triage, then move into the specialized workspace for execution.
+        </p>
+        <div className="action-row">
+          <button type="button" className="action-btn primary" onClick={openScheduler}>Open Planning Studio</button>
+          <button type="button" className="action-btn secondary" onClick={openDispatchLab}>Open Dispatch Lab</button>
+        </div>
+      </article>
+
       <div className="kpi-grid">
         <article className="kpi-card">
           <div className="kpi-label">Total Assignments</div>
@@ -256,37 +220,28 @@ export function CommandCenter({ openScheduler }: CommandCenterProps) {
 
         <article className="panel">
           <header className="panel-head">
-            <h2 className="panel-title">Dispatch Accelerator</h2>
-            <span className="badge ok">Live API</span>
+            <h2 className="panel-title">Executive Signals</h2>
+            <span className="badge ok">Ops Summary</span>
           </header>
           <div className="panel-body">
-            <div className="inline-form">
-              <input value={zip} onChange={(event) => setZip(event.target.value)} placeholder="ZIP" />
-              <input value={product} onChange={(event) => setProduct(event.target.value)} placeholder="Product" />
-              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-              <input type="number" min={1} max={30} value={totalDays} onChange={(event) => setTotalDays(Math.max(1, Math.min(30, Number(event.target.value) || 1)))} placeholder="Days" />
+            <div className="ops-list">
+              <div className="ops-item">
+                <div className="ops-line">Conflict Pressure</div>
+                <div className="ops-mini">{metrics.conflictCount > 5 ? 'Immediate intervention recommended.' : metrics.conflictCount > 0 ? 'Moderate risk; intervene this week.' : 'No conflict pressure currently detected.'}</div>
+              </div>
+              <div className="ops-item">
+                <div className="ops-line">Data Quality</div>
+                <div className="ops-mini">{metrics.missingDetails} incomplete assignment records require client/location completion.</div>
+              </div>
+              <div className="ops-item">
+                <div className="ops-line">Average Work Block</div>
+                <div className="ops-mini">{metrics.avgDuration} days per assignment used for staffing calibration.</div>
+              </div>
             </div>
 
             <div className="action-row">
-              <button type="button" className="action-btn primary" disabled={busy} onClick={() => void runDispatch('single')}>
-                {busy ? 'Working...' : 'Generate Setup Link'}
-              </button>
-              <button type="button" className="action-btn secondary" disabled={busy} onClick={() => void runDispatch('multi')}>
-                {busy ? 'Working...' : 'Reserve Multi-Day Block'}
-              </button>
+              <button type="button" className="action-btn secondary" onClick={openDispatchLab}>Launch Dispatch Lab</button>
             </div>
-
-            {dispatchResult?.success ? (
-              <div className="callout good">
-                Team: {dispatchResult.assignedTeam?.manager || 'Manager'} + {dispatchResult.assignedTeam?.technician || 'Technician'}
-                <br />
-                Territory: {dispatchResult.territory || 'Unknown'}
-                {dispatchResult.totalWorkingDays ? <><br />Reserved days: {dispatchResult.totalWorkingDays}</> : null}
-                {dispatchResult.bookingUrl ? <><br /><a href={dispatchResult.bookingUrl} target="_blank" rel="noreferrer">{dispatchResult.bookingUrl}</a></> : null}
-              </div>
-            ) : null}
-
-            {dispatchResult && !dispatchResult.success ? <div className="callout bad">{dispatchResult.message || 'Dispatch action failed.'}</div> : null}
           </div>
         </article>
       </div>
