@@ -1,10 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 const dataDirectory = process.env.LINEAR_SYNC_DATA_DIR
   ? path.resolve(process.env.LINEAR_SYNC_DATA_DIR)
@@ -814,7 +810,7 @@ async function processSampleEvent() {
   );
 }
 
-export {
+module.exports = {
   getConfig,
   saveConfig,
   getAuthStatus,
