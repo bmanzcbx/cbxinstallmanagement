@@ -15,6 +15,12 @@ services:
         value: "true"
       - key: LINEAR_WEBHOOK_TOKEN
         value: 8d9ef5a264544c8c1d88021fc699d7c5694d166126828668
+      - key: CAL_COM_API_KEY
+        sync: false
+      - key: CAL_COM_API_BASE_URL
+        value: https://api.cal.com
+      - key: CAL_COM_EVENT_TYPES_PATH
+        value: /v2/event-types
     disks:
       - name: linear-sync-data
         mountPath: /var/data

@@ -10,6 +10,17 @@ type BookingResult = {
   message: string;
 };
 
+type DispatchResult = {
+  success: boolean;
+  bookingUrl?: string;
+  territory?: string;
+  assignedTeam?: {
+    manager: string;
+    technician: string;
+  };
+  message?: string;
+};
+
 type PageSetupSettings = {
   fontFamily: string;
   baseFontSize: string;
@@ -161,6 +172,10 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
     endDate: Date;
     label: string;
   }>(null);
+  const [dispatchZip, setDispatchZip] = useState('');
+  const [dispatchProduct, setDispatchProduct] = useState('');
+  const [isDispatching, setIsDispatching] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState<DispatchResult | null>(null);
   const calendarRef = useRef<HTMLDivElement | null>(null);
   const ganttTrackRef = useRef<HTMLDivElement | null>(null);
   const selectedBookingIdRef = useRef<string | null>(null);
@@ -1144,6 +1159,43 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
     setResult({ success: true, message: 'Booking change cancelled.' });
   };
 
+  const generateDispatchLink = async () => {
+    setIsDispatching(true);
+    setDispatchResult(null);
+
+    try {
+      const response = await fetch(getApiUrl('/api/dispatch/route-setup'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zip: dispatchZip, product: dispatchProduct }),
+      });
+
+      const payload = await readJsonResponse(response);
+      if (!response.ok || !payload?.success || !payload?.bookingUrl) {
+        const message = payload?.message || 'Dispatch routing failed.';
+        setDispatchResult({ success: false, message });
+        setResult({ success: false, message });
+        return;
+      }
+
+      const nextResult: DispatchResult = {
+        success: true,
+        bookingUrl: payload.bookingUrl,
+        territory: payload.territory,
+        assignedTeam: payload.assignedTeam,
+      };
+
+      setDispatchResult(nextResult);
+      setResult({ success: true, message: 'Intelligent setup link generated.' });
+    } catch (error) {
+      const message = 'Unable to reach dispatch routing service.';
+      setDispatchResult({ success: false, message });
+      setResult({ success: false, message });
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
   useEffect(() => {
     const handleGlobalWheel = (event: WheelEvent) => {
       if (!ganttChartHovered || event.ctrlKey || !ganttZoomLocked) {
@@ -2005,6 +2057,50 @@ export function CohortPicker({ value, onChange, className }: CohortPickerProps) 
           <button type="button" onClick={() => setViewMode('capacity')} style={{ border: 'none', borderRadius: '0.1rem', padding: '0.5rem 0.8rem', background: viewMode === 'capacity' ? `linear-gradient(135deg, ${pageSetup.primaryColor}, ${pageSetup.secondaryColor})` : 'transparent', color: viewMode === 'capacity' ? 'white' : pageSetup.mutedTextColor, fontWeight: 800, cursor: 'pointer', transition: 'all 180ms ease', boxShadow: 'none' }} onMouseEnter={(event) => { event.currentTarget.style.background = viewMode === 'capacity' ? `linear-gradient(135deg, ${pageSetup.primaryColor}, ${pageSetup.secondaryColor})` : 'rgba(148, 163, 184, 0.16)'; event.currentTarget.style.color = viewMode === 'capacity' ? 'white' : pageSetup.textColor; event.currentTarget.style.boxShadow = '0 4px 10px rgba(15, 23, 42, 0.08)'; }} onMouseLeave={(event) => { event.currentTarget.style.background = viewMode === 'capacity' ? `linear-gradient(135deg, ${pageSetup.primaryColor}, ${pageSetup.secondaryColor})` : 'transparent'; event.currentTarget.style.color = viewMode === 'capacity' ? 'white' : pageSetup.mutedTextColor; event.currentTarget.style.boxShadow = 'none'; }}>Capacity Planner</button>
         </div>
       </div>
+      <section style={{ marginTop: '0.75rem', borderRadius: '0.95rem', border: `1px solid ${pageSetup.panelBorder}`, background: 'rgba(255,255,255,0.78)', padding: '0.75rem' }}>
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: pageSetup.textColor }}>Dispatch Routing (Cal.com)</div>
+          <div style={{ fontSize: '0.78rem', color: pageSetup.mutedTextColor }}>
+            Generate an intelligent setup link by ZIP + product. This does not push anything into Smartsheet.
+          </div>
+          <div style={{ display: 'grid', gap: '0.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <input
+              value={dispatchZip}
+              onChange={(event) => setDispatchZip(event.target.value)}
+              placeholder="Client ZIP (e.g. 60611)"
+              style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '0.65rem', padding: '0.55rem 0.65rem', fontSize: '0.82rem', color: '#0f172a' }}
+            />
+            <input
+              value={dispatchProduct}
+              onChange={(event) => setDispatchProduct(event.target.value)}
+              placeholder="Product model"
+              style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '0.65rem', padding: '0.55rem 0.65rem', fontSize: '0.82rem', color: '#0f172a' }}
+            />
+            <button
+              type="button"
+              onClick={() => void generateDispatchLink()}
+              disabled={isDispatching}
+              style={{ border: 'none', borderRadius: '0.65rem', background: 'linear-gradient(135deg, #0f766e, #2563eb)', color: 'white', padding: '0.55rem 0.75rem', fontSize: '0.8rem', fontWeight: 800, cursor: isDispatching ? 'default' : 'pointer' }}
+            >
+              {isDispatching ? 'Generating...' : 'Generate setup link'}
+            </button>
+          </div>
+          {dispatchResult?.success && dispatchResult.bookingUrl ? (
+            <div style={{ display: 'grid', gap: '0.3rem', padding: '0.55rem', borderRadius: '0.65rem', border: '1px solid rgba(16,185,129,0.25)', background: '#ecfdf5' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>
+                Team: {dispatchResult.assignedTeam?.manager || 'Manager'} + {dispatchResult.assignedTeam?.technician || 'Technician'}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#065f46' }}>Territory: {dispatchResult.territory || 'Unknown'}</div>
+              <a href={dispatchResult.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 700, wordBreak: 'break-all' }}>
+                {dispatchResult.bookingUrl}
+              </a>
+            </div>
+          ) : null}
+          {dispatchResult && !dispatchResult.success ? (
+            <div style={{ fontSize: '0.78rem', color: '#991b1b', fontWeight: 700 }}>{dispatchResult.message || 'Dispatch link generation failed.'}</div>
+          ) : null}
+        </div>
+      </section>
       <div ref={calendarRef} onClick={handleCalendarBackgroundClick} style={{ position: 'relative', padding: '0.75rem', borderRadius: '18px', background: pageSetup.calendarSurface, border: `1px solid ${pageSetup.panelBorder}`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)' }}>
         {viewMode === 'installers' ? (
           <div style={{ display: 'grid', gap: '0.85rem' }}>

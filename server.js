@@ -4,8 +4,10 @@ const path = require('path');
 
 const bookingService = require(path.join(__dirname, 'src', 'bookingService.js'));
 const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmartsheetService.js'));
+const dispatchService = require(path.join(__dirname, 'src', 'dispatchService.js'));
 const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings } = bookingService;
 const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, getStatus, testConnections, generateSmartsheetStructure, processLinearEvent, processSampleEvent } = linearSmartsheetService;
+const { generateIntelligentSetupLink } = dispatchService;
 const distDirectory = path.join(__dirname, 'dist');
 const distIndexFile = path.join(distDirectory, 'index.html');
 
@@ -221,6 +223,34 @@ app.post('/api/integrations/linear-smartsheet/webhook', async (req, res) => {
     console.error(error);
     const isAuthError = String(error?.message || '').toLowerCase().includes('token');
     res.status(isAuthError ? 401 : 400).json({ success: false, message: error?.message || 'Webhook processing failed.' });
+  }
+});
+
+app.post('/api/dispatch/route-setup', async (req, res) => {
+  try {
+    const zip = String(req.body?.zip || '').trim();
+    const product = String(req.body?.product || '').trim();
+
+    if (!zip || !product) {
+      return res.status(400).json({
+        success: false,
+        fallbackToManualDispatch: true,
+        message: 'Both zip and product are required.',
+      });
+    }
+
+    const bookingsResult = await getBookings();
+    const bookings = bookingsResult?.success && Array.isArray(bookingsResult.data) ? bookingsResult.data : [];
+
+    const result = await generateIntelligentSetupLink(zip, product, { bookings });
+    res.json(result);
+  } catch (error) {
+    console.error('Dispatch routing failure', error);
+    res.status(400).json({
+      success: false,
+      fallbackToManualDispatch: true,
+      message: error?.message || 'Unable to generate an intelligent setup link.',
+    });
   }
 });
 
