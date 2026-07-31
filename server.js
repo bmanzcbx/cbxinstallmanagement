@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 
 const bookingService = require(path.join(__dirname, 'src', 'bookingService.js'));
 const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmartsheetService.js'));
@@ -10,6 +11,34 @@ const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, ge
 const { generateIntelligentSetupLink, reserveMultiDayProjectDispatch } = dispatchService;
 const distDirectory = path.join(__dirname, 'dist');
 const distIndexFile = path.join(distDirectory, 'index.html');
+const adminSessions = new Map();
+const adminSessionLifetimeMs = 1000 * 60 * 60 * 12;
+
+function createAdminSessionToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function pruneAdminSessions() {
+  const now = Date.now();
+  for (const [token, expiresAt] of adminSessions.entries()) {
+    if (expiresAt <= now) {
+      adminSessions.delete(token);
+    }
+  }
+}
+
+function isAdminSessionValid(token) {
+  if (!token) {
+    return false;
+  }
+  pruneAdminSessions();
+  const expiresAt = adminSessions.get(String(token));
+  if (!expiresAt || expiresAt <= Date.now()) {
+    adminSessions.delete(String(token));
+    return false;
+  }
+  return true;
+}
 
 function getLinearSyncSessionToken(req) {
   return req.headers['x-linear-sync-session'] || req.query.sessionToken || null;
@@ -30,6 +59,39 @@ app.use(express.json());
 
 app.get('/healthz', (req, res) => {
   res.status(200).json({ ok: true });
+});
+
+app.post('/api/admin/access', (req, res) => {
+  const submittedCode = String(req.body?.code || '').trim();
+  const expectedCode = String(process.env.ADMIN_AREA_CODE || 'cleanbotix-admin').trim();
+
+  if (!submittedCode || submittedCode !== expectedCode) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid admin access code.',
+    });
+  }
+
+  const sessionToken = createAdminSessionToken();
+  adminSessions.set(sessionToken, Date.now() + adminSessionLifetimeMs);
+
+  return res.json({
+    success: true,
+    data: {
+      sessionToken,
+      expiresInMs: adminSessionLifetimeMs,
+    },
+  });
+});
+
+app.get('/api/admin/access-status', (req, res) => {
+  const token = req.headers['x-admin-session'] || req.query.adminSessionToken;
+  const authorized = isAdminSessionValid(token);
+  res.status(authorized ? 200 : 401).json({
+    success: authorized,
+    data: { authorized },
+    message: authorized ? 'Admin session active.' : 'Admin session expired or invalid.',
+  });
 });
 
 app.get('/api/bookings', async (req, res) => {

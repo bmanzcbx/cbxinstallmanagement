@@ -27,6 +27,8 @@ services:
         value: Dispatch Client
       - key: CAL_COM_DEFAULT_ATTENDEE_EMAIL
         value: dispatch@example.com
+      - key: ADMIN_AREA_CODE
+        sync: false
     disks:
       - name: linear-sync-data
         mountPath: /var/data

@@ -2,17 +2,33 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { CohortPicker } from './CohortPicker';
 import { LinearSmartsheetPage } from './LinearSmartsheetPage';
+import { CommandCenter } from './CommandCenter';
+import './app-shell.css';
 
-type AppView = 'scheduler' | 'linear-sync';
+type AppView = 'command-center' | 'scheduler' | 'linear-sync';
 const sessionStorageKey = 'linear-sync-session-token';
+const adminSessionStorageKey = 'cleanbotix-admin-session-token';
 
 function getViewFromHash(): AppView {
-  return window.location.hash === '#linear-sync' ? 'linear-sync' : 'scheduler';
+  if (window.location.hash === '#scheduler') {
+    return 'scheduler';
+  }
+
+  if (window.location.hash === '#linear-sync') {
+    return 'linear-sync';
+  }
+
+  return 'command-center';
 }
 
 function App() {
   const [view, setView] = React.useState<AppView>(getViewFromHash());
   const [linearSyncUnlocked, setLinearSyncUnlocked] = React.useState(() => Boolean(window.sessionStorage.getItem(sessionStorageKey)));
+  const [adminAccess, setAdminAccess] = React.useState(false);
+  const [showAdminPrompt, setShowAdminPrompt] = React.useState(false);
+  const [adminCode, setAdminCode] = React.useState('');
+  const [adminMessage, setAdminMessage] = React.useState<string | null>(null);
+  const [adminBusy, setAdminBusy] = React.useState(false);
 
   React.useEffect(() => {
     const handleHashChange = () => setView(getViewFromHash());
@@ -30,104 +46,172 @@ function App() {
     };
   }, []);
 
-  const title = view === 'linear-sync' ? 'Linear to Smartsheet Automation' : 'CleanBotix Installation Schedule';
+  React.useEffect(() => {
+    const sessionToken = window.sessionStorage.getItem(adminSessionStorageKey);
+    if (!sessionToken) {
+      return;
+    }
+
+    let mounted = true;
+    const validateAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/access-status', {
+          headers: {
+            'x-admin-session': sessionToken,
+          },
+        });
+        const payload = await response.json();
+        if (mounted) {
+          setAdminAccess(Boolean(response.ok && payload?.success && payload?.data?.authorized));
+        }
+      } catch (error) {
+        if (mounted) {
+          setAdminAccess(false);
+        }
+      }
+    };
+
+    void validateAdminSession();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (view === 'linear-sync' && !adminAccess) {
+      setView('command-center');
+      window.location.hash = '#command-center';
+    }
+  }, [adminAccess, view]);
+
+  const switchView = (next: AppView) => {
+    setView(next);
+    window.location.hash = `#${next}`;
+  };
+
+  const handleAdminAccess = async () => {
+    const code = adminCode.trim();
+    if (!code) {
+      setAdminMessage('Enter admin access code.');
+      return;
+    }
+
+    setAdminBusy(true);
+    setAdminMessage(null);
+    try {
+      const response = await fetch('/api/admin/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.success || !payload?.data?.sessionToken) {
+        throw new Error(payload?.message || 'Admin access denied.');
+      }
+
+      window.sessionStorage.setItem(adminSessionStorageKey, payload.data.sessionToken);
+      setAdminAccess(true);
+      setShowAdminPrompt(false);
+      setAdminCode('');
+      setAdminMessage(null);
+      switchView('linear-sync');
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : 'Admin access denied.');
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  const title = view === 'linear-sync'
+    ? 'Linear Sync Administration'
+    : view === 'scheduler'
+      ? 'Scheduling Workspace'
+      : 'Operations Command Center';
   const subtitle = view === 'linear-sync'
-    ? 'Configure a webhook-driven sync that forwards Linear issue and project changes into Smartsheet.'
-    : 'Select a date range for your booking.';
+    ? 'Protected integration controls for Linear to Smartsheet sync.'
+    : view === 'scheduler'
+      ? 'Calendar, Gantt, Capacity, and Installer planning tools.'
+      : 'Operational intelligence, dispatch acceleration, and risk triage in one view.';
 
   return (
-    <main
-      style={{
-        maxWidth: '1180px',
-        margin: '2rem auto',
-        padding: '1.25rem',
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, rgba(14, 116, 144, 0.16), rgba(15, 23, 42, 0.24))',
-        borderRadius: '24px',
-        boxShadow: '0 18px 50px rgba(2, 6, 23, 0.22)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255,255,255,0.28)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          marginBottom: '1rem',
-          padding: '1rem 1.2rem',
-          borderRadius: '18px',
-          background: 'rgba(255,255,255,0.42)',
-          border: '1px solid rgba(255,255,255,0.35)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+    <main className="app-shell">
+      <div className="app-topbar">
+        <div className="brand-block">
           <img
             src="/images/Screenshot 2026-07-16 192958.png"
             alt="CleanBotix logo"
-            style={{ height: '54px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 8px 20px rgba(2,6,23,0.15))' }}
+            className="brand-logo"
           />
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.6rem', color: '#0f172a' }}>{title}</h1>
-            <p style={{ margin: '0.2rem 0 0', color: '#334155' }}>{subtitle}</p>
+            <h1 className="brand-title">{title}</h1>
+            <p className="brand-subtitle">{subtitle}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+
+        <div className="main-nav">
           <button
+            className={`nav-btn ${view === 'command-center' ? 'active' : ''}`}
             type="button"
-            onClick={() => {
-              window.location.hash = '#scheduler';
-              setView('scheduler');
-            }}
-            style={{
-              padding: '0.7rem 0.95rem',
-              borderRadius: '999px',
-              border: view === 'scheduler' ? 'none' : '1px solid rgba(148,163,184,0.35)',
-              background: view === 'scheduler' ? '#0f172a' : 'rgba(255,255,255,0.7)',
-              color: view === 'scheduler' ? '#fff' : '#0f172a',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
+            onClick={() => switchView('command-center')}
           >
-            Scheduler
+            Command Center
           </button>
           <button
+            className={`nav-btn ${view === 'scheduler' ? 'active' : ''}`}
             type="button"
-            onClick={() => {
-              window.location.hash = '#linear-sync';
-              setView('linear-sync');
-              setLinearSyncUnlocked(Boolean(window.sessionStorage.getItem(sessionStorageKey)));
-            }}
-            style={{
-              padding: '0.7rem 0.95rem',
-              borderRadius: '999px',
-              border: view === 'linear-sync' ? 'none' : '1px solid rgba(148,163,184,0.35)',
-              background: view === 'linear-sync' ? '#0f766e' : 'rgba(255,255,255,0.7)',
-              color: view === 'linear-sync' ? '#fff' : '#0f172a',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
+            onClick={() => switchView('scheduler')}
           >
-            {linearSyncUnlocked ? 'Linear Sync' : 'Linear Sync Locked'}
+            Scheduling Workspace
           </button>
         </div>
       </div>
-      <div
-        style={{
-          padding: '1rem',
-          borderRadius: '20px',
-          background: 'rgba(255,255,255,0.56)',
-          border: '1px solid rgba(255,255,255,0.38)',
-          boxShadow: '0 14px 36px rgba(15,23,42,0.12)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        {view === 'linear-sync' ? <LinearSmartsheetPage /> : <CohortPicker />}
+
+      <div className="app-content">
+        {view === 'command-center' ? <CommandCenter openScheduler={() => switchView('scheduler')} /> : null}
+        {view === 'scheduler' ? <CohortPicker /> : null}
+        {view === 'linear-sync' ? <LinearSmartsheetPage /> : null}
       </div>
+
+      <div className="shell-footer">
+        <button
+          type="button"
+          className="admin-trigger"
+          onClick={() => {
+            setShowAdminPrompt(true);
+            setAdminMessage(null);
+            setAdminCode('');
+          }}
+        >
+          {adminAccess ? (linearSyncUnlocked ? 'Admin Open' : 'Admin Locked') : 'Admin'}
+        </button>
+      </div>
+
+      {showAdminPrompt ? (
+        <div className="modal-scrim" onClick={() => setShowAdminPrompt(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <h2 className="modal-title">Administration Access</h2>
+            <p className="modal-copy">This hidden area contains integration controls and remains protected.</p>
+            <input
+              value={adminCode}
+              onChange={(event) => setAdminCode(event.target.value)}
+              type="password"
+              placeholder="Enter admin access code"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleAdminAccess();
+                }
+              }}
+            />
+            {adminMessage ? <p className="modal-copy" style={{ color: '#b91c1c' }}>{adminMessage}</p> : null}
+            <div className="modal-actions">
+              <button type="button" className="modal-btn" onClick={() => setShowAdminPrompt(false)}>Cancel</button>
+              <button type="button" className="modal-btn primary" onClick={() => void handleAdminAccess()} disabled={adminBusy}>{adminBusy ? 'Checking...' : 'Enter Admin Area'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
