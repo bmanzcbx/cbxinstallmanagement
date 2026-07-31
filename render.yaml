@@ -8,3 +8,10 @@ services:
     healthCheckPath: /healthz
     plan: free
     autoDeploy: true
+    envVars:
+      - key: LINEAR_SYNC_DATA_DIR
+        value: /var/data/linear-sync
+    disks:
+      - name: linear-sync-data
+        mountPath: /var/data
+        sizeGB: 1

@@ -82,6 +82,7 @@ type ApiEnvelope<T> = {
 };
 
 const sessionStorageKey = 'linear-sync-session-token';
+const defaultRenderBaseUrl = 'https://cbxinstallmanagement.onrender.com';
 
 const emptyColumnMap: ColumnMap = {
   linearId: '',
@@ -101,7 +102,7 @@ const emptyColumnMap: ColumnMap = {
 const emptyConfig: IntegrationConfig = {
   enabled: false,
   autoGenerateSheetStructure: true,
-  publicBaseUrl: '',
+  publicBaseUrl: defaultRenderBaseUrl,
   smartsheetSheetId: '',
   webhookToken: '',
   webhookUrlPath: '/api/integrations/linear-smartsheet/webhook',
@@ -162,7 +163,7 @@ function createInitialForm(config: IntegrationConfig): SaveForm {
   return {
     enabled: config.enabled,
     autoGenerateSheetStructure: config.autoGenerateSheetStructure,
-    publicBaseUrl: config.publicBaseUrl || '',
+    publicBaseUrl: config.publicBaseUrl || defaultRenderBaseUrl,
     linearApiKey: '',
     smartsheetApiKey: '',
     smartsheetSheetId: config.smartsheetSheetId || '',
@@ -303,6 +304,7 @@ export function LinearSmartsheetPage() {
 
     const autoSaveBaseUrl = async () => {
       setIsAutoSavingBaseUrl(true);
+      const preferredBaseUrl = isRenderOrigin ? normalizedOrigin : defaultRenderBaseUrl;
 
       try {
         const response = await authFetch('/api/integrations/linear-smartsheet/config', {
@@ -310,7 +312,7 @@ export function LinearSmartsheetPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...form,
-            publicBaseUrl: normalizedOrigin,
+            publicBaseUrl: preferredBaseUrl,
           }),
         });
 
@@ -321,7 +323,7 @@ export function LinearSmartsheetPage() {
 
         setConfig(payload.data);
         setForm(createInitialForm(payload.data));
-        setMessage({ tone: 'success', text: `Render base URL auto-saved as ${normalizedOrigin}.` });
+        setMessage({ tone: 'success', text: `Render base URL auto-saved as ${preferredBaseUrl}.` });
       } catch (error) {
         setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Unable to auto-save Render base URL.' });
       } finally {
@@ -595,7 +597,7 @@ export function LinearSmartsheetPage() {
                   type="text"
                   value={form.publicBaseUrl}
                   onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
-                  placeholder="https://your-service.onrender.com"
+                  placeholder={defaultRenderBaseUrl}
                   style={inputStyle}
                 />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
