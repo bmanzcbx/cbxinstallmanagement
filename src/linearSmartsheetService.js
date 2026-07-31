@@ -49,6 +49,7 @@ function createDefaultConfig() {
     smartsheetApiKey: '',
     smartsheetSheetId: '',
     webhookToken: crypto.randomBytes(24).toString('hex'),
+    webhookPreviousTokens: [],
     accessPasswordHash: '',
     smartsheetColumnMap: { ...defaultColumnMap },
     createdAt: new Date().toISOString(),
@@ -148,6 +149,7 @@ async function saveConfig(input) {
     publicBaseUrl: normalizedPublicBaseUrl,
     smartsheetSheetId: (input.smartsheetSheetId || current.smartsheetSheetId || '').trim(),
     webhookToken: (input.webhookToken || current.webhookToken || '').trim() || crypto.randomBytes(24).toString('hex'),
+    webhookPreviousTokens: Array.isArray(current.webhookPreviousTokens) ? current.webhookPreviousTokens : [],
     smartsheetColumnMap: {
       ...defaultColumnMap,
       ...current.smartsheetColumnMap,
@@ -155,6 +157,18 @@ async function saveConfig(input) {
     },
     updatedAt: new Date().toISOString(),
   };
+
+  const incomingWebhookToken = typeof input.webhookToken === 'string' ? input.webhookToken.trim() : '';
+  if (incomingWebhookToken && incomingWebhookToken !== (current.webhookToken || '').trim()) {
+    const previousTokens = [
+      (current.webhookToken || '').trim(),
+      ...(Array.isArray(current.webhookPreviousTokens) ? current.webhookPreviousTokens : []),
+    ]
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index)
+      .slice(0, 3);
+    next.webhookPreviousTokens = previousTokens;
+  }
 
   if (typeof input.linearApiKey === 'string' && input.linearApiKey.trim()) {
     next.linearApiKey = input.linearApiKey.trim();
@@ -600,8 +614,12 @@ async function processLinearEvent(payload, requestHeaders = {}) {
     const providedTokenRaw = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
     const providedToken = typeof providedTokenRaw === 'string' ? decodeURIComponent(providedTokenRaw).trim() : null;
     const expectedToken = String(config.webhookToken || '').trim();
+    const previousTokens = Array.isArray(config.webhookPreviousTokens)
+      ? config.webhookPreviousTokens.map((value) => String(value || '').trim()).filter(Boolean)
+      : [];
+    const acceptedTokens = [expectedToken, ...previousTokens].filter(Boolean);
 
-    if (!expectedToken || providedToken !== expectedToken) {
+    if (!acceptedTokens.length || !providedToken || !acceptedTokens.includes(providedToken)) {
       throw new Error('Invalid webhook token. Copy the latest production webhook URL from Linear Sync and replace the webhook URL in Linear.');
     }
 
