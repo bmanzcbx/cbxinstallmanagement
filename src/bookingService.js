@@ -37,6 +37,123 @@ function toCsv(rows) {
   return [header.join(','), ...rowLines].join('\n');
 }
 
+function parseCsv(csvText) {
+  const text = String(csvText || '').trim();
+  if (!text) {
+    return [];
+  }
+
+  const rows = [];
+  let current = '';
+  let currentRow = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    const nextCharacter = text[index + 1];
+
+    if (character === '"' && inQuotes && nextCharacter === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (character === ',' && !inQuotes) {
+      currentRow.push(current);
+      current = '';
+      continue;
+    }
+
+    if ((character === '\n' || character === '\r') && !inQuotes) {
+      if (character === '\r' && nextCharacter === '\n') {
+        continue;
+      }
+
+      currentRow.push(current);
+      if (currentRow.some((value) => String(value).trim().length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      current = '';
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (current.length || currentRow.length) {
+    currentRow.push(current);
+    if (currentRow.some((value) => String(value).trim().length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const [header, ...dataRows] = rows;
+  const normalizedHeader = header.map((column) => String(column || '').trim());
+
+  return dataRows.map((columns) => {
+    const row = {};
+    normalizedHeader.forEach((key, position) => {
+      row[key] = columns[position] ?? '';
+    });
+    return row;
+  });
+}
+
+function normalizeImportedBooking(row) {
+  const startDate = new Date(row.startDate || row.start || row.start_date);
+  const endDate = new Date(row.endDate || row.end || row.end_date);
+
+  return {
+    roomId: String(row.roomId || row.room_id || row.room || 'imported-room').trim() || 'imported-room',
+    clientName: String(row.clientName || row.client_name || row.name || '').trim(),
+    location: String(row.location || row.site || row.address || '').trim(),
+    botCount: Number(row.botCount || row.bot_count || row.count || 0) || 0,
+    startDate,
+    endDate,
+    status: String(row.status || 'PENDING_APPROVAL').trim() || 'PENDING_APPROVAL',
+  };
+}
+
+async function importBookingsFromCsv(csvText) {
+  const records = parseCsv(csvText)
+    .map(normalizeImportedBooking)
+    .filter((record) => !Number.isNaN(record.startDate.getTime()) && !Number.isNaN(record.endDate.getTime()));
+
+  if (!records.length) {
+    return { success: false, message: 'No valid rows were found in the CSV file.' };
+  }
+
+  const created = [];
+  for (const record of records) {
+    const result = await createBooking(record.roomId, record.startDate, record.endDate, {
+      clientName: record.clientName,
+      location: record.location,
+      botCount: record.botCount,
+    });
+
+    if (result?.success && result?.data) {
+      created.push(result.data);
+    }
+  }
+
+  return {
+    success: true,
+    data: created,
+    imported: created.length,
+    totalRows: records.length,
+  };
+}
+
 async function createBooking(roomId, start, end, details = {}) {
   if (!prisma) {
     const fallbackBooking = {
@@ -233,4 +350,5 @@ module.exports = {
   updateBookingDates,
   updateBookingDetails,
   exportBookings,
+  importBookingsFromCsv,
 };

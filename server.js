@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const bookingService = require(path.join(__dirname, 'src', 'bookingService.js'));
 const linearSmartsheetService = require(path.join(__dirname, 'src', 'linearSmartsheetService.js'));
 const dispatchService = require(path.join(__dirname, 'src', 'dispatchService.js'));
-const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings } = bookingService;
+const { createBooking, getBookings, updateBookingDates, updateBookingDetails, exportBookings, importBookingsFromCsv } = bookingService;
 const { getConfig, saveConfig, getAuthStatus, unlockAccess, assertAuthorized, getStatus, testConnections, generateSmartsheetStructure, processLinearEvent, processSampleEvent } = linearSmartsheetService;
 const { generateIntelligentSetupLink, reserveMultiDayProjectDispatch } = dispatchService;
 const distDirectory = path.join(__dirname, 'dist');
@@ -124,6 +124,22 @@ app.get('/api/bookings/export', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Unable to export bookings.' });
+  }
+});
+
+app.post('/api/bookings/import', async (req, res) => {
+  try {
+    const csvText = String(req.body?.csvText || req.body?.csv || '').trim();
+
+    if (!csvText) {
+      return res.status(400).json({ success: false, message: 'csvText is required.' });
+    }
+
+    const result = await importBookingsFromCsv(csvText);
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Unable to import bookings from CSV.' });
   }
 });
 

@@ -97,6 +97,8 @@ export function CommandCenter({ openScheduler, openDispatchLab }: CommandCenterP
   const [bookings, setBookings] = React.useState<BookingItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [csvImportBusy, setCsvImportBusy] = React.useState(false);
+  const [csvStatus, setCsvStatus] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -137,6 +139,42 @@ export function CommandCenter({ openScheduler, openDispatchLab }: CommandCenterP
 
   const riskLabel = metrics.conflictCount > 5 ? 'High conflict pressure' : metrics.conflictCount > 0 ? 'Watch conflicts' : 'Schedule healthy';
   const riskClass = metrics.conflictCount > 5 ? 'danger' : metrics.conflictCount > 0 ? 'warn' : 'ok';
+
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setCsvImportBusy(true);
+    setCsvStatus(`Loading ${file.name}...`);
+
+    try {
+      const csvText = await file.text();
+      const response = await fetch('/api/bookings/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvText }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'CSV import failed.');
+      }
+
+      setCsvStatus(`Imported ${payload.imported || 0} row${(payload.imported || 0) === 1 ? '' : 's'} from ${file.name}.`);
+      const refreshResponse = await fetch('/api/bookings', { cache: 'no-store' });
+      const refreshPayload = await refreshResponse.json();
+      if (refreshResponse.ok && refreshPayload?.success && Array.isArray(refreshPayload.data)) {
+        setBookings(refreshPayload.data);
+      }
+    } catch (importError) {
+      setCsvStatus(importError instanceof Error ? importError.message : 'CSV import failed.');
+    } finally {
+      setCsvImportBusy(false);
+      event.target.value = '';
+    }
+  };
 
   return (
     <section className="command-center">
@@ -245,6 +283,43 @@ export function CommandCenter({ openScheduler, openDispatchLab }: CommandCenterP
           </div>
         </article>
       </div>
+
+      <article className="panel">
+        <header className="panel-head">
+          <h2 className="panel-title">Data Exchange</h2>
+          <span className="badge ok">CSV Import / Export</span>
+        </header>
+        <div className="panel-body">
+          <div className="ops-mini">
+            Export the current schedule as CSV, or import a prepared file to seed bookings from spreadsheets and operations handoffs.
+          </div>
+
+          <div className="action-row">
+            <a className="action-btn primary" href="/api/bookings/export?format=csv" target="_blank" rel="noreferrer" download="bookings.csv" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              Export CSV
+            </a>
+            <a className="action-btn secondary" href="/api/bookings/export" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              Export JSON
+            </a>
+            <label className="action-btn secondary" style={{ display: 'inline-flex', alignItems: 'center', cursor: csvImportBusy ? 'default' : 'pointer' }}>
+              {csvImportBusy ? 'Importing...' : 'Import CSV'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => void handleCsvImport(event)}
+                style={{ display: 'none' }}
+                disabled={csvImportBusy}
+              />
+            </label>
+          </div>
+
+          <div className="callout good">
+            Sample columns: roomId, clientName, location, botCount, startDate, endDate, status.
+          </div>
+
+          {csvStatus ? <div className={csvStatus.toLowerCase().includes('fail') || csvStatus.toLowerCase().includes('error') ? 'callout bad' : 'callout good'}>{csvStatus}</div> : null}
+        </div>
+      </article>
     </section>
   );
 }
