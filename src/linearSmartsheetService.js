@@ -40,6 +40,15 @@ const defaultColumnDefinitions = {
   rawPayload: { title: 'Linear Payload', type: 'TEXT_NUMBER' },
 };
 
+function getManagedWebhookToken() {
+  const envToken = process.env.LINEAR_WEBHOOK_TOKEN;
+  return typeof envToken === 'string' ? envToken.trim() : '';
+}
+
+function resolveWebhookToken(config) {
+  return getManagedWebhookToken() || String(config?.webhookToken || '').trim();
+}
+
 function createDefaultConfig() {
   return {
     enabled: false,
@@ -48,7 +57,7 @@ function createDefaultConfig() {
     linearApiKey: '',
     smartsheetApiKey: '',
     smartsheetSheetId: '',
-    webhookToken: crypto.randomBytes(24).toString('hex'),
+    webhookToken: getManagedWebhookToken() || crypto.randomBytes(24).toString('hex'),
     webhookPreviousTokens: [],
     accessPasswordHash: '',
     smartsheetColumnMap: { ...defaultColumnMap },
@@ -114,12 +123,15 @@ async function getStoredConfig() {
 }
 
 function sanitizeConfig(config) {
+  const managedWebhookToken = getManagedWebhookToken();
+  const resolvedWebhookToken = resolveWebhookToken(config);
   return {
     enabled: Boolean(config.enabled),
     autoGenerateSheetStructure: config.autoGenerateSheetStructure !== false,
     publicBaseUrl: config.publicBaseUrl || '',
     smartsheetSheetId: config.smartsheetSheetId || '',
-    webhookToken: config.webhookToken || '',
+    webhookToken: resolvedWebhookToken,
+    webhookTokenManaged: Boolean(managedWebhookToken),
     webhookUrlPath: '/api/integrations/linear-smartsheet/webhook',
     smartsheetColumnMap: {
       ...defaultColumnMap,
@@ -139,6 +151,7 @@ async function getConfig() {
 
 async function saveConfig(input) {
   const current = await getStoredConfig();
+  const managedWebhookToken = getManagedWebhookToken();
   const normalizedPublicBaseUrl = String(input.publicBaseUrl || current.publicBaseUrl || '')
     .trim()
     .replace(/\/+$/, '');
@@ -148,7 +161,7 @@ async function saveConfig(input) {
     autoGenerateSheetStructure: input.autoGenerateSheetStructure !== false,
     publicBaseUrl: normalizedPublicBaseUrl,
     smartsheetSheetId: (input.smartsheetSheetId || current.smartsheetSheetId || '').trim(),
-    webhookToken: (input.webhookToken || current.webhookToken || '').trim() || crypto.randomBytes(24).toString('hex'),
+    webhookToken: managedWebhookToken || (input.webhookToken || current.webhookToken || '').trim() || crypto.randomBytes(24).toString('hex'),
     webhookPreviousTokens: Array.isArray(current.webhookPreviousTokens) ? current.webhookPreviousTokens : [],
     smartsheetColumnMap: {
       ...defaultColumnMap,
@@ -159,7 +172,7 @@ async function saveConfig(input) {
   };
 
   const incomingWebhookToken = typeof input.webhookToken === 'string' ? input.webhookToken.trim() : '';
-  if (incomingWebhookToken && incomingWebhookToken !== (current.webhookToken || '').trim()) {
+  if (!managedWebhookToken && incomingWebhookToken && incomingWebhookToken !== (current.webhookToken || '').trim()) {
     const previousTokens = [
       (current.webhookToken || '').trim(),
       ...(Array.isArray(current.webhookPreviousTokens) ? current.webhookPreviousTokens : []),
@@ -613,7 +626,7 @@ async function processLinearEvent(payload, requestHeaders = {}) {
   try {
     const providedTokenRaw = requestHeaders['x-webhook-token'] || getHeaderValue(requestHeaders, 'x-webhook-token') || payload?.token || payload?.webhookToken || null;
     const providedToken = typeof providedTokenRaw === 'string' ? decodeURIComponent(providedTokenRaw).trim() : null;
-    const expectedToken = String(config.webhookToken || '').trim();
+    const expectedToken = resolveWebhookToken(config);
     const previousTokens = Array.isArray(config.webhookPreviousTokens)
       ? config.webhookPreviousTokens.map((value) => String(value || '').trim()).filter(Boolean)
       : [];
