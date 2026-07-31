@@ -11,6 +11,10 @@ services:
     envVars:
       - key: LINEAR_SYNC_DATA_DIR
         value: /var/data/linear-sync
+      - key: LINEAR_SYNC_ENABLED
+        value: "true"
+      - key: LINEAR_WEBHOOK_TOKEN
+        value: 8d9ef5a264544c8c1d88021fc699d7c5694d166126828668
     disks:
       - name: linear-sync-data
         mountPath: /var/data

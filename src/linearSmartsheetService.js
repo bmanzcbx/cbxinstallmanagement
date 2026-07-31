@@ -45,6 +45,22 @@ function getManagedWebhookToken() {
   return typeof envToken === 'string' ? envToken.trim() : '';
 }
 
+function getManagedSyncEnabled() {
+  const rawValue = process.env.LINEAR_SYNC_ENABLED;
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const value = rawValue.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(value)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(value)) {
+    return false;
+  }
+  return null;
+}
+
 function resolveWebhookToken(config) {
   return getManagedWebhookToken() || String(config?.webhookToken || '').trim();
 }
@@ -124,9 +140,11 @@ async function getStoredConfig() {
 
 function sanitizeConfig(config) {
   const managedWebhookToken = getManagedWebhookToken();
+  const managedSyncEnabled = getManagedSyncEnabled();
   const resolvedWebhookToken = resolveWebhookToken(config);
   return {
-    enabled: Boolean(config.enabled),
+    enabled: managedSyncEnabled === null ? Boolean(config.enabled) : managedSyncEnabled,
+    enabledManaged: managedSyncEnabled !== null,
     autoGenerateSheetStructure: config.autoGenerateSheetStructure !== false,
     publicBaseUrl: config.publicBaseUrl || '',
     smartsheetSheetId: config.smartsheetSheetId || '',
@@ -152,12 +170,13 @@ async function getConfig() {
 async function saveConfig(input) {
   const current = await getStoredConfig();
   const managedWebhookToken = getManagedWebhookToken();
+  const managedSyncEnabled = getManagedSyncEnabled();
   const normalizedPublicBaseUrl = String(input.publicBaseUrl || current.publicBaseUrl || '')
     .trim()
     .replace(/\/+$/, '');
   const next = {
     ...current,
-    enabled: Boolean(input.enabled),
+    enabled: managedSyncEnabled === null ? Boolean(input.enabled) : managedSyncEnabled,
     autoGenerateSheetStructure: input.autoGenerateSheetStructure !== false,
     publicBaseUrl: normalizedPublicBaseUrl,
     smartsheetSheetId: (input.smartsheetSheetId || current.smartsheetSheetId || '').trim(),
@@ -636,7 +655,10 @@ async function processLinearEvent(payload, requestHeaders = {}) {
       throw new Error('Invalid webhook token. Copy the latest production webhook URL from Linear Sync and replace the webhook URL in Linear.');
     }
 
-    if (!config.enabled) {
+    const managedSyncEnabled = getManagedSyncEnabled();
+    const syncEnabled = managedSyncEnabled === null ? Boolean(config.enabled) : managedSyncEnabled;
+
+    if (!syncEnabled) {
       throw new Error('Linear to Smartsheet sync is disabled.');
     }
 
