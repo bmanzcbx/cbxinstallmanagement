@@ -9,7 +9,7 @@
     "start": "node server.js",
     "preview": "vite preview",
     "prisma:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && npm run build"
   },
   "keywords": [],
   "author": "",
